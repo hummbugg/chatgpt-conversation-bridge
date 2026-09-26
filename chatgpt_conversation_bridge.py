@@ -2,6 +2,10 @@
 """
 ChatGPT Conversation Bridge
 
+Version: 1.0.0
+Author: hummbugg
+Copyright (c) 2026 hummbugg
+
 Convert a manually saved ChatGPT shared-conversation capture to DOCX for
 conversation continuation and archival.
 
