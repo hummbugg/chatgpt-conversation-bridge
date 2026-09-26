@@ -1,0 +1,17 @@
+# ChatGPT Conversation Bridge generated output
+/archive/
+/docx/
+
+# Browser-saved ChatGPT conversation captures
+/*.html
+/*.htm
+/*_files/
+
+# Python-generated cache files
+__pycache__/
+*.py[cod]
+
+# Operating-system metadata
+.DS_Store
+Thumbs.db
+Desktop.ini
