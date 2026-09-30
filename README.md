@@ -2,7 +2,7 @@
 
 ChatGPT Conversation Bridge helps preserve and continue valuable ChatGPT conversations.
 
-Its primary purpose is to make it practical to continue a conversation after it has reached its maximum length. It converts a browser-saved ChatGPT conversation into a readable DOCX that can be used as historical context when continuing the work in a new ChatGPT conversation.
+Its primary purpose is to make it practical to continue a conversation after it has reached its maximum length. It retrieves a ChatGPT shared conversation via a shared link, creates a permanent ZIP archive, and generates a readable DOCX that can be used as historical context when continuing the work in a new ChatGPT conversation.
 
 The generated DOCX also provides a portable, human-readable archive that can be opened independently in Microsoft Word, LibreOffice Writer, or another compatible DOCX reader.
 
@@ -13,16 +13,13 @@ The generated DOCX also provides a portable, human-readable archive that can be 
 - [What Is ChatGPT Conversation Bridge?](documentation/chatgpt-conversation-bridge-documentation.md#purpose)
 - [What Do I Need Before I Start?](documentation/chatgpt-conversation-bridge-documentation.md#requirements)
 - [Installing Python](documentation/chatgpt-conversation-bridge-documentation.md#installing-python)
-- [Setting Up ChatGPT Conversation Bridge](documentation/chatgpt-conversation-bridge-documentation.md#initial-folder-setup)
+- [Download and Extract ChatGPT Conversation Bridge](documentation/chatgpt-conversation-bridge-documentation.md#download-and-extract-chatgpt-conversation-bridge)
 - [Supported and Tested Operating Systems and Software](documentation/chatgpt-conversation-bridge-documentation.md#tested-platforms-and-python-versions)
 
 ### Saving & Archiving a Chat
 
 - [How to Archive an Existing ChatGPT Conversation](documentation/chatgpt-conversation-bridge-documentation.md#normal-workflow)
 - [Creating the ChatGPT Shared Link](documentation/chatgpt-conversation-bridge-documentation.md#create-the-chatgpt-shared-link)
-- [Standard Loading Method](documentation/chatgpt-conversation-bridge-documentation.md#standard-loading-method)
-- [Verified Loading Method](documentation/chatgpt-conversation-bridge-documentation.md#verified-loading-method)
-- [Saving the Conversation with Chrome](documentation/chatgpt-conversation-bridge-documentation.md#save-the-loaded-conversation-with-chrome)
 - [Running ChatGPT Conversation Bridge to Create the DOCX](documentation/chatgpt-conversation-bridge-documentation.md#run-chatgpt-conversation-bridge)
 - [Where Are My Archive and DOCX Files?](documentation/chatgpt-conversation-bridge-documentation.md#output-locations)
 - [Regenerating a DOCX from an Existing Archive](documentation/chatgpt-conversation-bridge-documentation.md#permanent-archive-and-docx-regeneration)
@@ -37,7 +34,6 @@ The generated DOCX also provides a portable, human-readable archive that can be 
 - [How Images and Attachments Are Preserved](documentation/chatgpt-conversation-bridge-documentation.md#images-and-attachments)
 - [Why Are Some Images or Attachments Missing?](documentation/chatgpt-conversation-bridge-documentation.md#images-and-attachments)
 - [What Do "Image Unavailable" and "Attachment Unavailable" Mean?](documentation/chatgpt-conversation-bridge-documentation.md#images-and-attachments)
-- [Why Is Chrome Required for Saving Conversations?](documentation/chatgpt-conversation-bridge-documentation.md#browser-compatibility)
 
 ### Using the Generated Document
 

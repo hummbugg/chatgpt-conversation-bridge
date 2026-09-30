@@ -25,7 +25,7 @@ The companion Markdown version on GitHub is intended to provide convenient onlin
 
 ## Standard Initial Chat Continuation Message
 
-Drag and drop the continuation DOCX which is the document previously created by ChatGPT Conversation Bridge from now on referred to as continuation DOCX, into ChatGPT's message composer but do not submit the message yet.
+Drag and drop the continuation DOCX previously created by ChatGPT Conversation Bridge into ChatGPT's message composer, but do not submit the message yet. This document will be referred to as the continuation DOCX throughout these instructions.
 
 Copy and paste the following standard message into ChatGPT's message composer. Submit the message and wait for ChatGPT to acknowledge that the continuation document has been received.
 
@@ -50,19 +50,15 @@ Once you receive the reply from ChatGPT proceed to the next section "**How to Su
 
 ## How to Submit the Standard ChatGPT Conversation Continuation Instructions
 
-Since ChatGPT has already confirmed that it has received the continuation DOCX, we now must give ChatGPT instructions stating what to do with the continuation document.
+Since ChatGPT has already confirmed that it received the continuation DOCX, we must now provide the instructions that tell ChatGPT how to use the continuation document.
 
-The complete standard continuation-instructions template appears in the next section. Copy the complete template following the instructions in the section **Standard ChatGPT Conversation Continuation Instructions to be Copied** below and do not submit yet.
+The complete standard continuation-instructions template appears in the next section. Follow the instructions there to copy the complete template, but do not submit it yet.
 
 ## Standard ChatGPT Conversation Continuation Instructions to be Copied
 
 Copy the complete **ChatGPT Conversation Continuation Instructions** below and paste them into ChatGPT's message composer.
 
-After pasting the instructions, scroll to the top of ChatGPT's message composer so that you can see `My Continuation Document.docx` on the `CONTINUATION DOCUMENT:` line.
-
-`My Continuation Document.docx` is a placeholder for the actual continuation DOCX. Replace `My Continuation Document.docx` with the exact filename of the continuation DOCX that was uploaded in the section **Standard Initial Chat Continuation Message** above.
-
-Verify that the filename is correct, then submit the message. The remaining standard continuation instructions are intended to stay unchanged.
+The standard continuation instructions are intended to stay unchanged. After pasting the complete instructions, submit the message.
 
 ``` text
 ChatGPT Conversation Continuation Instructions
@@ -71,16 +67,14 @@ Generic instructions for continuing a previous ChatGPT conversation from a gener
 
 Continuation Document
 
-CONTINUATION DOCUMENT: My Continuation Document.docx
+The continuation DOCX is the document that was uploaded in the immediately preceding
+CHAT CONTINUATION message and that ChatGPT has already acknowledged receiving.
 
-For each new continuation, change only the filename above so that it exactly matches the
-uploaded DOCX containing the previous conversation.
-
-The remaining instructions are intended to stay the same for every conversation.
+Use that uploaded document as the continuation DOCX for these instructions.
 
 Purpose
 
-These instructions tell a new ChatGPT conversation how to continue from the named continuation
+These instructions tell a new ChatGPT conversation how to continue from the continuation
 DOCX with as little loss of context as practical.
 
 The continuation DOCX is the chronological record of the previous conversation. The objective is
@@ -88,8 +82,8 @@ continuation, not redesign, reinterpretation, or replacement of the earlier disc
 
 Continuation Declaration
 
-This chat is a direct continuation of the ChatGPT conversation preserved in the CONTINUATION
-DOCUMENT named above.
+This chat is a direct continuation of the ChatGPT conversation preserved in the continuation DOCX
+identified above.
 
 Treat the continuation DOCX and the current chat as one chronological conversation when
 historical checking is requested.
@@ -103,7 +97,7 @@ it appears in the continuation DOCX.
 
 Initial Synchronization
 
-When these instructions and the named continuation DOCX are first provided to a new chat,
+When these instructions and the continuation DOCX are first provided to a new chat,
 perform a one-time initial synchronization before resuming normal work.
 
 During initial synchronization, review the continuation DOCX sufficiently to understand:
@@ -239,7 +233,7 @@ continuation work fast and prevents unnecessary reprocessing of a large historic
 
 FULL CHECK: ON
 
-When FULL CHECK is ON, use both the current conversation and the named continuation DOCX
+When FULL CHECK is ON, use both the current conversation and the continuation DOCX
 whenever prior history could materially affect the answer.
 
 Before treating an important decision, rule, requirement, preference, unresolved question,
@@ -258,10 +252,10 @@ uncertain rather than filling the gap from assumption.
 
 Switching FULL CHECK Modes
 
-If the user says full check on or otherwise clearly requests FULL CHECK: ON, switch to FULL
+If the user says FULL CHECK: ON or otherwise clearly requests FULL CHECK: ON, switch to FULL
 CHECK: ON and keep it on until changed.
 
-If the user says full check off or otherwise clearly requests FULL CHECK: OFF, switch to FULL
+If the user says FULL CHECK: OFF or otherwise clearly requests FULL CHECK: OFF, switch to FULL
 CHECK: OFF and keep it off until changed.
 
 Explicit Historical Checks While FULL CHECK Is OFF

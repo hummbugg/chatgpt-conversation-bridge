@@ -2,44 +2,42 @@
 """
 ChatGPT Conversation Bridge
 
-Version: 1.0.0
+Version: 2.0.0
 Author: hummbugg
 Copyright (c) 2026 hummbugg
 
-Convert a manually saved ChatGPT shared-conversation capture to DOCX for
-conversation continuation and archival.
+Preserve a public ChatGPT shared conversation as a permanent ZIP archive
+and a DOCX document for conversation continuation and archival.
 
 Usage:
-    python chatgpt_conversation_bridge.py "CONVERSATION_NAME"
-    python chatgpt_conversation_bridge.py "CONVERSATION_NAME.html"
-    python chatgpt_conversation_bridge.py "CONVERSATION_NAME.htm"
+    python chatgpt_conversation_bridge.py "https://chatgpt.com/share/<share-id>"
+    python chatgpt_conversation_bridge.py "archive/CONVERSATION_NAME.zip"
 
 The script uses its own directory as the working directory.
 
-Source lookup order:
-    1. CONVERSATION_NAME.html
-    2. CONVERSATION_NAME.htm
-    3. archive/CONVERSATION_NAME.zip
+For a public ChatGPT Share URL, the conversation JSON is retrieved from
+ChatGPT and supported uploaded images are downloaded when available. A
+permanent ZIP archive is created containing conversation.json and the
+successfully retrieved images. The DOCX is then generated from that data.
 
-For a new live HTML/HTM capture, the DOCX is created first. The saved page
-and its matching *_files directory are then archived to archive/ and the
-archive is reopened and verified before the original capture is removed.
+For an existing ChatGPT Conversation Bridge ZIP archive, the DOCX is
+regenerated directly from the archive without modifying the permanent ZIP.
 
-For an already archived capture, the DOCX is regenerated directly from the
-ZIP without extracting or modifying the permanent archive.
+Archives are written to:
+    archive/CONVERSATION_NAME.zip
 
 DOCX output is written to:
     docx/CONVERSATION_NAME.docx
 
-An existing output DOCX is always overwritten.
+An existing output DOCX is always overwritten. An existing permanent
+conversation archive is not overwritten.
 
 Requires:
     Python 3.10+
-    No third-party Python packages are required.
+    curl_cffi
 
-The program reads only local files and does not contact ChatGPT or any other
-network service. Locally saved PNG resources may be embedded when available;
-unavailable uploaded images/files are represented by a visible placeholder.
+A network connection is required when processing a public ChatGPT Share URL.
+Regenerating a DOCX from an existing archive is an offline operation.
 """
 
 from __future__ import annotations
@@ -48,38 +46,20 @@ import argparse
 import html as html_lib
 import zipfile
 import datetime as _dt
+import time
 from zoneinfo import ZoneInfo
 from xml.etree import ElementTree as ET
 import json
 import re
-import shutil
 import sys
 from pathlib import Path
 from typing import Any, Iterable
 from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
-
-ENQUEUE_MARKER = "window.__reactRouterContext.streamController.enqueue("
-MISSING_UPLOAD = "[Uploaded image/file was not included in the saved HTML]"
-
+from curl_cffi import requests
 
 class ExtractionError(RuntimeError):
     pass
 
-
-def read_html(path: Path) -> str:
-    raw = path.read_bytes()
-    # Saved pages from the tested browsers are UTF-8. utf-8-sig also tolerates BOM.
-    try:
-        return raw.decode("utf-8-sig")
-    except UnicodeDecodeError as exc:
-        raise ExtractionError(f"Input is not valid UTF-8 HTML: {exc}") from exc
-
-def decode_html_bytes(raw: bytes) -> str:
-    """Decode saved ChatGPT HTML bytes as UTF-8."""
-    try:
-        return raw.decode("utf-8-sig")
-    except UnicodeDecodeError as exc:
-        raise ExtractionError(f"Input is not valid UTF-8 HTML: {exc}") from exc
 
 def managed_directories(script_path: Path) -> tuple[Path, Path, Path]:
     """Return the working, archive, and DOCX directories."""
@@ -88,333 +68,6 @@ def managed_directories(script_path: Path) -> tuple[Path, Path, Path]:
     docx_dir = working_dir / "docx"
     return working_dir, archive_dir, docx_dir
 
-def capture_base_name(value: str) -> str:
-    """Return the capture base name, ignoring a trailing .html or .htm."""
-    name = Path(value).name
-
-    if name.lower().endswith(".html"):
-        return name[:-5]
-
-    if name.lower().endswith(".htm"):
-        return name[:-4]
-
-    return name
-
-def resolve_capture_source(
-    value: str,
-    working_dir: Path,
-    archive_dir: Path,
-) -> Path:
-    """Resolve a capture from live HTML/HTM first, then its archived ZIP."""
-    base_name = capture_base_name(value)
-
-    html_path = working_dir / f"{base_name}.html"
-    if html_path.is_file():
-        return html_path
-
-    htm_path = working_dir / f"{base_name}.htm"
-    if htm_path.is_file():
-        return htm_path
-
-    archive_path = archive_dir / f"{base_name}.zip"
-    if archive_path.is_file():
-        return archive_path
-
-    raise ExtractionError(
-        "No saved capture was found for:\n"
-        f"{base_name}\n\n"
-        "Checked:\n"
-        f"{html_path}\n"
-        f"{htm_path}\n"
-        f"{archive_path}"
-    )
-
-def read_capture_archive_html(archive_path: Path) -> tuple[str, str]:
-    """Read the single HTML/HTM member from a saved capture archive."""
-    try:
-        with zipfile.ZipFile(archive_path, "r") as zf:
-            html_members = [
-                name
-                for name in zf.namelist()
-                if not name.endswith("/")
-                and Path(name).suffix.lower() in {".html", ".htm"}
-            ]
-
-            if not html_members:
-                raise ExtractionError(
-                    f"Archive contains no HTML/HTM file: {archive_path}"
-                )
-
-            if len(html_members) > 1:
-                raise ExtractionError(
-                    "Archive contains more than one HTML/HTM file; "
-                    "the conversation source is ambiguous."
-                )
-
-            html_member = html_members[0]
-            raw = zf.read(html_member)
-
-    except zipfile.BadZipFile as exc:
-        raise ExtractionError(
-            f"Archive is not a valid ZIP file: {archive_path}"
-        ) from exc
-
-    return decode_html_bytes(raw), html_member
-
-def create_capture_archive(
-    input_path: Path,
-    companion_dir: Path,
-    archive_path: Path,
-) -> None:
-    """Archive the saved HTML/HTM and its companion *_files directory."""
-    if archive_path.exists():
-        raise ExtractionError(f"Archive already exists: {archive_path}")
-
-    try:
-        with zipfile.ZipFile(
-            archive_path,
-            "x",
-            compression=zipfile.ZIP_DEFLATED,
-        ) as zf:
-            zf.write(input_path, arcname=input_path.name)
-
-            if companion_dir.is_dir():
-                for path in sorted(companion_dir.rglob("*")):
-                    if path.is_file():
-                        relative = path.relative_to(input_path.parent)
-                        zf.write(path, arcname=relative.as_posix())
-
-    except Exception:
-        # A failed archive must never be mistaken for a valid permanent source.
-        try:
-            archive_path.unlink(missing_ok=True)
-        except OSError:
-            pass
-        raise
-
-def verify_capture_archive(
-    archive_path: Path,
-    input_path: Path,
-    companion_dir: Path,
-) -> None:
-    """Reopen and verify a completed capture archive."""
-    expected_members = {input_path.name}
-
-    if companion_dir.is_dir():
-        for path in companion_dir.rglob("*"):
-            if path.is_file():
-                relative = path.relative_to(input_path.parent)
-                expected_members.add(relative.as_posix())
-
-    try:
-        with zipfile.ZipFile(archive_path, "r") as zf:
-            bad_member = zf.testzip()
-            if bad_member is not None:
-                raise ExtractionError(
-                    f"Archive verification failed for member: {bad_member}"
-                )
-
-            actual_members = set(zf.namelist())
-
-            if actual_members != expected_members:
-                missing = sorted(expected_members - actual_members)
-                unexpected = sorted(actual_members - expected_members)
-
-                details = []
-                if missing:
-                    details.append("Missing: " + ", ".join(missing))
-                if unexpected:
-                    details.append("Unexpected: " + ", ".join(unexpected))
-
-                raise ExtractionError(
-                    "Archive contents do not match the saved capture.\n"
-                    + "\n".join(details)
-                )
-
-    except zipfile.BadZipFile as exc:
-        raise ExtractionError(
-            f"Archive verification failed: {archive_path}"
-        ) from exc
-
-def remove_original_capture(
-    input_path: Path,
-    companion_dir: Path,
-) -> None:
-    """Remove the original capture only after its archive has been verified."""
-    input_path.unlink()
-
-    if companion_dir.is_dir():
-        shutil.rmtree(companion_dir)
-
-def find_saved_image_src(source: str, filename: str) -> str | None:
-    """Find the saved page's relative img src for one attachment filename."""
-    if not filename:
-        return None
-
-    pattern = re.compile(
-        r'''<img\b[^>]*\bsrc\s*=\s*(["'])([^"']+)["']''',
-        re.IGNORECASE,
-    )
-
-    matches: list[str] = []
-
-    for match in pattern.finditer(source):
-        src = html_lib.unescape(match.group(2))
-
-        src_path = src.split("?", 1)[0].split("#", 1)[0]
-        if src_path.replace("\\", "/").rsplit("/", 1)[-1] == filename:
-            matches.append(src)
-
-    if len(matches) == 1:
-        return matches[0]
-
-    return None
-
-def find_message_image_srcs(source: str, message_id: str) -> list[str | None]:
-    """Find rendered uploaded-image slots within one message section."""
-    if not message_id:
-        return []
-
-    marker = f'data-message-id="{message_id}"'
-    message_pos = source.find(marker)
-
-    if message_pos < 0:
-        return []
-
-    section_start = source.rfind("<section", 0, message_pos)
-    section_end = source.find("</section>", message_pos)
-
-    if section_start < 0 or section_end < 0:
-        return []
-
-    block = source[section_start:section_end + len("</section>")]
-
-    if block.count("data-message-id=") != 1:
-        return []
-
-    slot_pattern = re.compile(
-        r'''<(?P<tag>button|div)\b(?P<attrs>[^>]*)>''',
-        re.IGNORECASE,
-    )
-    open_image_pattern = re.compile(
-        r'''\baria-label\s*=\s*(["'])Open image \d+ of \d+: Uploaded image\1''',
-        re.IGNORECASE,
-    )
-    failed_image_pattern = re.compile(
-        r'''\b(?:title|aria-label)\s*=\s*(["'])Could not load image\1''',
-        re.IGNORECASE,
-    )
-    src_pattern = re.compile(
-        r'''<img\b(?=[^>]*\balt\s*=\s*(["'])Uploaded image\1)[^>]*\bsrc\s*=\s*(["'])([^"']+)\2''',
-        re.IGNORECASE,
-    )
-
-    slots: list[str | None] = []
-
-    for match in slot_pattern.finditer(block):
-        attrs = match.group("attrs")
-
-        if failed_image_pattern.search(attrs):
-            slots.append(None)
-            continue
-
-        if not open_image_pattern.search(attrs):
-            continue
-
-        tag_end = block.find(f"</{match.group('tag')}>", match.end())
-        if tag_end < 0:
-            continue
-
-        image_match = src_pattern.search(block, match.end(), tag_end)
-        if image_match:
-            slots.append(html_lib.unescape(image_match.group(3)))
-
-    return slots
-
-def resolve_local_saved_resource(input_path: Path, saved_src: str) -> Path | None:
-    """Safely resolve a saved relative resource beside the input HTML."""
-    if not saved_src:
-        return None
-
-    resource = saved_src.split("?", 1)[0].split("#", 1)[0]
-    resource = html_lib.unescape(resource).replace("\\", "/")
-
-    if resource.startswith("/") or re.match(r"^[A-Za-z]:", resource):
-        return None
-
-    parts = [part for part in resource.split("/") if part not in ("", ".")]
-
-    if not parts or any(part == ".." for part in parts):
-        return None
-
-    base = input_path.parent.resolve()
-    candidate = base.joinpath(*parts).resolve()
-
-    try:
-        candidate.relative_to(base)
-    except ValueError:
-        return None
-
-    return candidate
-
-def resolve_archive_saved_resource(
-    html_member: str,
-    saved_src: str,
-) -> str | None:
-    """Safely resolve a saved relative resource within the capture archive."""
-    if not html_member or not saved_src:
-        return None
-
-    resource = saved_src.split("?", 1)[0].split("#", 1)[0]
-    resource = html_lib.unescape(resource).replace("\\", "/")
-
-    if resource.startswith("/") or re.match(r"^[A-Za-z]:", resource):
-        return None
-
-    resource_parts = [
-        part for part in resource.split("/")
-        if part not in ("", ".")
-    ]
-
-    if not resource_parts or any(part == ".." for part in resource_parts):
-        return None
-
-    html_parts = html_member.replace("\\", "/").split("/")
-    base_parts = html_parts[:-1]
-
-    member_parts = base_parts + resource_parts
-
-    if any(part in ("", ".", "..") for part in member_parts):
-        return None
-
-    return "/".join(member_parts)
-
-def read_image_data(path: Path | None) -> bytes | None:
-    """Read a local saved-image resource without assuming its format."""
-    if path is None or not path.is_file():
-        return None
-
-    try:
-        return path.read_bytes()
-    except OSError:
-        return None
-
-def read_image_data_from_archive(
-    archive_path: Path,
-    member_name: str | None,
-) -> bytes | None:
-    """Read a saved-image resource directly from an archive without assuming its format."""
-    if not member_name:
-        return None
-
-    try:
-        with zipfile.ZipFile(archive_path, "r") as zf:
-            try:
-                return zf.read(member_name)
-            except KeyError:
-                return None
-    except (OSError, zipfile.BadZipFile):
-        return None
 
 def png_dimensions(data: bytes | None) -> tuple[int, int] | None:
     """Validate PNG structure and return width and height from the IHDR chunk."""
@@ -425,7 +78,7 @@ def png_dimensions(data: bytes | None) -> tuple[int, int] | None:
         return None
 
     if data[12:16] != b"IHDR":
-        return None    
+        return None
 
     width = int.from_bytes(data[16:20], "big")
     height = int.from_bytes(data[20:24], "big")
@@ -622,115 +275,6 @@ def image_display_size_emu(dimensions: tuple[int, int] | None) -> tuple[int, int
         height_emu = round(height_emu * scale)
 
     return width_emu, height_emu
-
-def extract_enqueue_arguments(source: str) -> list[str]:
-    """Return decoded JavaScript string arguments passed to enqueue(...).
-
-    ChatGPT currently writes enqueue("...") where the argument uses JSON-style
-    string escaping. json.JSONDecoder lets us parse the quoted string without
-    depending on browser-specific saved-page markup.
-    """
-    decoder = json.JSONDecoder()
-    results: list[str] = []
-    pos = 0
-    while True:
-        start = source.find(ENQUEUE_MARKER, pos)
-        if start < 0:
-            break
-        i = start + len(ENQUEUE_MARKER)
-        while i < len(source) and source[i].isspace():
-            i += 1
-        if i >= len(source) or source[i] != '"':
-            pos = i
-            continue
-        try:
-            value, consumed = decoder.raw_decode(source[i:])
-        except json.JSONDecodeError:
-            pos = i + 1
-            continue
-        if isinstance(value, str):
-            results.append(value)
-        pos = i + consumed
-    return results
-
-
-def load_flat_payload(source: str) -> list[Any]:
-    candidates = extract_enqueue_arguments(source)
-    if not candidates:
-        raise ExtractionError("ChatGPT serialized conversation payload was not found.")
-
-    for text in candidates:
-        stripped = text.lstrip()
-        if not stripped.startswith("["):
-            continue
-        try:
-            value = json.loads(text)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(value, list) and "linear_conversation" in value:
-            return value
-
-    raise ExtractionError(
-        "A ChatGPT payload was found, but no supported conversation payload "
-        "containing linear_conversation could be decoded."
-    )
-
-
-class DevalueDecoder:
-    """Decode the integer-reference array used by the saved ChatGPT payload."""
-
-    def __init__(self, flat: list[Any]):
-        self.flat = flat
-        self.memo: dict[int, Any] = {}
-
-    def decode_ref(self, ref: Any) -> Any:
-        # In this format integers are array references. Booleans must be tested
-        # first because bool is a subclass of int in Python.
-        if isinstance(ref, bool) or ref is None or isinstance(ref, (str, float)):
-            return ref
-        if not isinstance(ref, int):
-            return ref
-        if ref < 0:
-            # Negative devalue sentinel values are not needed for conversation
-            # structure; preserve them rather than treating them as Python indexes.
-            return ref
-        if ref >= len(self.flat):
-            raise ExtractionError(f"Invalid payload reference index: {ref}")
-        if ref in self.memo:
-            return self.memo[ref]
-
-        raw = self.flat[ref]
-        if isinstance(raw, dict):
-            out: dict[str, Any] = {}
-            self.memo[ref] = out
-            for key_ref, value_ref in raw.items():
-                key_token = key_ref[1:] if key_ref.startswith("_") else key_ref
-                key = self.decode_ref(int(key_token)) if key_token.lstrip("-").isdigit() else key_ref
-                out[str(key)] = self.decode_ref(value_ref)
-            return out
-        if isinstance(raw, list):
-            out_list: list[Any] = []
-            self.memo[ref] = out_list
-            out_list.extend(self.decode_ref(item) for item in raw)
-            return out_list
-
-        self.memo[ref] = raw
-        return raw
-
-
-def find_conversation_root(flat: list[Any], decoder: DevalueDecoder) -> dict[str, Any]:
-    """Locate the decoded object that owns linear_conversation/current_node."""
-    for i, raw in enumerate(flat):
-        if not isinstance(raw, dict):
-            continue
-        decoded = decoder.decode_ref(i)
-        if not isinstance(decoded, dict):
-            continue
-        linear = decoded.get("linear_conversation")
-        if isinstance(linear, list) and "current_node" in decoded:
-            return decoded
-    raise ExtractionError("Could not locate the ChatGPT conversation object.")
-
 
 def validate_chain(nodes: list[dict[str, Any]], current_node: Any) -> None:
     if not nodes:
@@ -1539,137 +1083,759 @@ def create_docx(title: str, messages: list[tuple[str,str,list[dict[str, Any]],li
         for upload, _, media_name in image_relationships:
             zf.writestr(f"word/media/{media_name}", upload["image_data"])
 
-def main() -> int:
-    parser=argparse.ArgumentParser(
-        description="Convert a saved or archived ChatGPT shared-conversation capture to DOCX."
-    )
-    parser.add_argument(
-        "input_html",
-        help="Conversation base name, optionally ending in .html or .htm",
-    )
-    args=parser.parse_args()
-    
-    working_dir, archive_dir, docx_dir = managed_directories(Path(__file__))
-    archive_dir.mkdir(exist_ok=True)
-    docx_dir.mkdir(exist_ok=True)
+def load_public_share_conversation(
+    share_url: str,
+) -> tuple[dict[str, Any], Any, str]:
+    """Load the conversation JSON for a public ChatGPT Share URL."""
+    parsed = urlsplit(share_url)
 
-    base_name = capture_base_name(args.input_html)
+    if parsed.scheme not in {"http", "https"}:
+        raise ExtractionError("The Share URL must use http:// or https://.")
 
-    input_path = resolve_capture_source(
-        args.input_html,
-        working_dir,
-        archive_dir,
-    )
+    if parsed.netloc.lower() != "chatgpt.com":
+        raise ExtractionError("The Share URL must be on chatgpt.com.")
 
-    is_archive_source = input_path.suffix.lower() == ".zip"    
+    parts = [part for part in parsed.path.split("/") if part]
 
-    output_path = docx_dir / f"{base_name}.docx"
-    archive_path = archive_dir / f"{base_name}.zip"
-
-    if not is_archive_source and archive_path.exists():
+    if len(parts) != 2 or parts[0] != "share":
         raise ExtractionError(
-            f"An archive already exists:\n{archive_path}\n\n"
-            "The newly saved HTML and companion files were left unchanged."
-        )       
-    
-    if is_archive_source:
-        source, archive_html_member = read_capture_archive_html(input_path)
-    else:
-        source = read_html(input_path)
-        archive_html_member = None
+            "Expected a ChatGPT Share URL in this form:\n"
+            "https://chatgpt.com/share/<share-id>"
+        )
 
-    flat=load_flat_payload(source); decoder=DevalueDecoder(flat); conversation=find_conversation_root(flat,decoder)
+    share_id = parts[1]
+    canonical_share_url = f"https://chatgpt.com/share/{share_id}"
+    api_url = f"https://chatgpt.com/backend-api/share/{share_id}"
 
-    linear=conversation.get("linear_conversation")
-    if not isinstance(linear,list): raise ExtractionError("linear_conversation is missing or invalid.")
-    nodes=[node for node in linear if isinstance(node,dict)]
-    if len(nodes)!=len(linear): raise ExtractionError("linear_conversation contains an invalid node.")
-    validate_chain(nodes,conversation.get("current_node")); messages=visible_messages(nodes)
-    
-    message_image_srcs: dict[str, list[str | None]] = {}
+    try:
+        session = requests.Session(impersonate="chrome")
+
+        share_response = session.get(canonical_share_url)
+        share_response.raise_for_status()
+
+        api_response = session.get(api_url)
+        api_response.raise_for_status()
+
+        conversation = api_response.json()
+
+    except Exception as exc:
+        raise ExtractionError(
+            f"Could not retrieve the public ChatGPT conversation: {exc}"
+        ) from exc
+
+    if not isinstance(conversation, dict):
+        raise ExtractionError(
+            "The ChatGPT Share response is not a conversation object."
+        )
+
+    return conversation, session, share_id
+
+def load_public_share_image(
+    session: Any,
+    share_id: str,
+    upload: dict[str, Any],
+) -> bytes | None:
+    """Retrieve one public-share image from its stable file ID."""
+    asset_pointer = upload.get("asset_pointer")
+
+    if not (
+        isinstance(asset_pointer, str)
+        and asset_pointer.startswith("sediment://")
+    ):
+        return None
+
+    file_id = asset_pointer[len("sediment://"):].split("?", 1)[0]
+
+    if not file_id.startswith("file_"):
+        return None
+
+    resolver_url = (
+        f"https://chatgpt.com/backend-api/share/"
+        f"{share_id}/file/{file_id}"
+    )
+
+    try:
+        resolver_response = session.get(resolver_url)
+        resolver_response.raise_for_status()
+        resolver = resolver_response.json()
+    except Exception as exc:
+        raise ExtractionError(
+            f"Could not resolve uploaded image {file_id}: {exc}"
+        ) from exc
+
+    if not isinstance(resolver, dict):
+        return None
+
+    if resolver.get("status") != "success":
+        return None
+
+    download_url = resolver.get("download_url")
+
+    if not isinstance(download_url, str) or not download_url:
+        return None
+
+    try:
+        image_response = session.get(download_url)
+        image_response.raise_for_status()
+    except Exception as exc:
+        raise ExtractionError(
+            f"Could not download uploaded image {file_id}: {exc}"
+        ) from exc
+
+    return image_response.content
+
+def create_public_share_archive(
+    conversation: dict[str, Any],
+    messages: list[
+        tuple[
+            str,
+            str,
+            list[dict[str, Any]],
+            list[str],
+            float | None,
+        ]
+    ],
+    archive_path: Path,
+) -> None:
+    """Create and verify the permanent archive for a public Share conversation."""
+    if archive_path.exists():
+        raise ExtractionError(
+            f"Archive already exists: {archive_path}"
+        )
+
+    archive_path.parent.mkdir(exist_ok=True)
+
+    expected_members = {"conversation.json"}
+
+    try:
+        with zipfile.ZipFile(
+            archive_path,
+            "x",
+            compression=zipfile.ZIP_DEFLATED,
+        ) as zf:
+            conversation_json = json.dumps(
+                conversation,
+                ensure_ascii=False,
+                indent=2,
+            ).encode("utf-8")
+
+            zf.writestr(
+                "conversation.json",
+                conversation_json,
+            )
+
+            archived_file_ids: set[str] = set()
+
+            for _, _, uploads, _, _ in messages:
+                for upload in uploads:
+                    image_data = upload.get("image_data")
+                    info = upload.get("image_info")
+
+                    if image_data is None or info is None:
+                        continue
+
+                    asset_pointer = upload.get("asset_pointer")
+
+                    if not (
+                        isinstance(asset_pointer, str)
+                        and asset_pointer.startswith("sediment://")
+                    ):
+                        raise ExtractionError(
+                            "An embedded image has no valid "
+                            "sediment asset pointer."
+                        )
+
+                    file_id = (
+                        asset_pointer[len("sediment://"):]
+                        .split("?", 1)[0]
+                    )
+
+                    if not file_id.startswith("file_"):
+                        raise ExtractionError(
+                            "An embedded image has no valid file ID."
+                        )
+
+                    if file_id in archived_file_ids:
+                        continue
+
+                    extension = info.get("extension")
+
+                    if not (
+                        isinstance(extension, str)
+                        and extension
+                    ):
+                        raise ExtractionError(
+                            f"Could not determine the image "
+                            f"extension for {file_id}."
+                        )
+
+                    if not extension.startswith("."):
+                        extension = f".{extension}"
+
+                    archive_member = (
+                        f"uploads/{file_id}{extension.lower()}"
+                    )
+
+                    zf.writestr(
+                        archive_member,
+                        image_data,
+                    )
+
+                    expected_members.add(archive_member)
+                    archived_file_ids.add(file_id)
+
+    except Exception:
+        try:
+            archive_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
+
+    try:
+        with zipfile.ZipFile(archive_path, "r") as zf:
+            bad_member = zf.testzip()
+
+            if bad_member is not None:
+                raise ExtractionError(
+                    "Archive verification failed for member: "
+                    f"{bad_member}"
+                )
+
+            actual_members = set(zf.namelist())
+
+            if actual_members != expected_members:
+                missing = sorted(
+                    expected_members - actual_members
+                )
+                unexpected = sorted(
+                    actual_members - expected_members
+                )
+
+                details = []
+
+                if missing:
+                    details.append(
+                        "Missing: " + ", ".join(missing)
+                    )
+
+                if unexpected:
+                    details.append(
+                        "Unexpected: " + ", ".join(unexpected)
+                    )
+
+                raise ExtractionError(
+                    "Archive membership verification failed. "
+                    + " ".join(details)
+                )
+
+            archived_conversation = json.loads(
+                zf.read("conversation.json").decode("utf-8")
+            )
+
+            if archived_conversation != conversation:
+                raise ExtractionError(
+                    "Archived conversation.json does not match "
+                    "the retrieved conversation."
+                )
+
+    except Exception:
+        try:
+            archive_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
+
+def load_public_share_archive(
+    archive_path: Path,
+) -> tuple[dict[str, Any], dict[str, bytes]]:
+    """
+    Load and validate a permanent public-share archive.
+
+    Return the archived conversation object and a mapping of stable
+    file IDs to their archived image bytes.
+    """
+    if not archive_path.is_file():
+        raise ExtractionError(
+            f"Archive does not exist: {archive_path}"
+        )
+
+    try:
+        with zipfile.ZipFile(archive_path, "r") as zf:
+            bad_member = zf.testzip()
+
+            if bad_member is not None:
+                raise ExtractionError(
+                    "Archive verification failed for member: "
+                    f"{bad_member}"
+                )
+
+            members = zf.namelist()
+
+            if "conversation.json" not in members:
+                raise ExtractionError(
+                    "Archive does not contain conversation.json."
+                )
+
+            try:
+                conversation = json.loads(
+                    zf.read("conversation.json").decode("utf-8")
+                )
+            except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+                raise ExtractionError(
+                    "Archive conversation.json is invalid."
+                ) from exc
+
+            if not isinstance(conversation, dict):
+                raise ExtractionError(
+                    "Archive conversation.json is not an object."
+                )
+
+            image_data_by_file_id: dict[str, bytes] = {}
+
+            for member in members:
+                if not member.startswith("uploads/"):
+                    continue
+
+                if member.endswith("/"):
+                    continue
+
+                filename = member[len("uploads/"):]
+
+                if not filename or "/" in filename:
+                    raise ExtractionError(
+                        f"Invalid archived upload path: {member}"
+                    )
+
+                file_id = filename.rsplit(".", 1)[0]
+
+                if not file_id.startswith("file_"):
+                    raise ExtractionError(
+                        f"Invalid archived upload file ID: {member}"
+                    )
+
+                if file_id in image_data_by_file_id:
+                    raise ExtractionError(
+                        "Archive contains more than one image for "
+                        f"{file_id}."
+                    )
+
+                image_data = zf.read(member)
+
+                if image_info(image_data) is None:
+                    raise ExtractionError(
+                        "Archive contains an unsupported or invalid "
+                        f"image: {member}"
+                    )
+
+                image_data_by_file_id[file_id] = image_data
+
+    except zipfile.BadZipFile as exc:
+        raise ExtractionError(
+            f"Archive is not a valid ZIP file: {archive_path}"
+        ) from exc
+
+    return conversation, image_data_by_file_id
+
+def prepare_messages_from_public_share_archive(
+    conversation: dict[str, Any],
+    image_data_by_file_id: dict[str, bytes],
+) -> tuple[
+    list[dict[str, Any]],
+    list[
+        tuple[
+            str,
+            str,
+            list[dict[str, Any]],
+            list[str],
+            float | None,
+        ]
+    ],
+]:
+    """
+    Validate an archived conversation and prepare its visible messages
+    for the existing DOCX renderer.
+    """
+    linear = conversation.get("linear_conversation")
+
+    if not isinstance(linear, list):
+        raise ExtractionError(
+            "linear_conversation is missing or invalid."
+        )
+
+    nodes = [
+        node
+        for node in linear
+        if isinstance(node, dict)
+    ]
+
+    if len(nodes) != len(linear):
+        raise ExtractionError(
+            "linear_conversation contains an invalid node."
+        )
+
+    validate_chain(
+        nodes,
+        conversation.get("current_node"),
+    )
+
+    messages = visible_messages(nodes)
+
+    if not messages:
+        raise ExtractionError(
+            "No visible user/assistant messages were found."
+        )
+
+    used_image_file_ids: set[str] = set()
 
     for _, _, uploads, _, _ in messages:
-        image_ordinal = 0
-
         for upload in uploads:
-            filename = upload.get("filename")
-            saved_src = find_saved_image_src(source, filename) if filename else None
+            asset_pointer = upload.get("asset_pointer")
+            file_id = None
 
-            if upload.get("content_type") == "image_asset_pointer":
-                image_ordinal += 1
-
-                if saved_src is None:
-                    message_id = upload.get("message_id")
-
-                    if isinstance(message_id, str) and message_id:
-                        if message_id not in message_image_srcs:
-                            message_image_srcs[message_id] = find_message_image_srcs(
-                                source,
-                                message_id,
-                            )
-
-                        rendered_srcs = message_image_srcs[message_id]
-
-                        if image_ordinal <= len(rendered_srcs):
-                            saved_src = rendered_srcs[image_ordinal - 1]
-
-            upload["saved_src"] = saved_src            
-
-
-
-            if is_archive_source:
-                archive_member = (
-                    resolve_archive_saved_resource(archive_html_member, saved_src)
-                    if saved_src
-                    else None
+            if (
+                isinstance(asset_pointer, str)
+                and asset_pointer.startswith("sediment://")
+            ):
+                file_id = (
+                    asset_pointer[len("sediment://"):]
+                    .split("?", 1)[0]
                 )
-                upload["archive_member"] = archive_member
-                upload["local_path"] = None
-                upload["image_data"] = read_image_data_from_archive(
-                    input_path,
-                    archive_member,
-                )
-                upload["image_info"] = image_info(upload.get("image_data"))                
 
-            else:
-                upload["archive_member"] = None
-                upload["local_path"] = (
-                    resolve_local_saved_resource(input_path, saved_src)
-                    if saved_src else None
-                )
-                upload["image_data"] = read_image_data(upload.get("local_path"))
-                upload["image_info"] = image_info(upload.get("image_data"))
+            image_data = (
+                image_data_by_file_id.get(file_id)
+                if file_id is not None
+                else None
+            )
+
+            upload["image_data"] = image_data
+            upload["image_info"] = image_info(image_data)
 
             info = upload.get("image_info")
+
             upload["image_dimensions"] = (
                 info.get("dimensions")
                 if info is not None
                 else None
             )
+
             upload["display_size_emu"] = image_display_size_emu(
                 upload.get("image_dimensions")
             )
 
-    if not messages: raise ExtractionError("No visible user/assistant messages were found.")
-    title=conversation.get("title")
-    if not isinstance(title,str) or not title.strip(): title=input_path.stem
-    create_docx(title.strip(),messages,output_path)
+            if image_data is not None and file_id is not None:
+                used_image_file_ids.add(file_id)
 
-    if not is_archive_source:
-        companion_dir = input_path.with_name(f"{input_path.stem}_files")
-        create_capture_archive(input_path, companion_dir, archive_path)
-        verify_capture_archive(archive_path, input_path, companion_dir)
-        remove_original_capture(input_path, companion_dir)
+    unused_image_file_ids = (
+        set(image_data_by_file_id) - used_image_file_ids
+    )
 
-    user_count=sum(1 for role,_,_,_,_ in messages if role=="user"); assistant_count=sum(1 for role,_,_,_,_ in messages if role=="assistant"); upload_count=sum(len(items) for _,_,items,_,_ in messages); reference_count=sum(len(refs) for _,_,_,refs,_ in messages); timestamp_count=sum(1 for *_, timestamp in messages if timestamp is not None)
-    embedded_upload_count=sum(1 for _,_,uploads,_,_ in messages for upload in uploads if upload.get("image_info") is not None)
-    unavailable_upload_count=sum(1 for _,_,uploads,_,_ in messages for upload in uploads if upload.get("image_info") is None)
-    unavailable_label = (
-        "unavailable upload reference marked"
-        if unavailable_upload_count == 1
-        else "unavailable upload references marked"
+    if unused_image_file_ids:
+        raise ExtractionError(
+            "Archive contains image data not referenced by the "
+            "visible conversation: "
+            + ", ".join(sorted(unused_image_file_ids))
+        )
+
+    return nodes, messages
+
+def main() -> int:
+    start_time = _dt.datetime.now()
+    start_counter = time.perf_counter()
+    print(
+        f"Start Time: {start_time.strftime('%Y-%m-%d %I:%M:%S %p')}"
     )    
-    print(f"Input:      {input_path}"); print(f"Output:     {output_path}"); print(f"Nodes:      {len(nodes)} (chain validated)"); print(f"Messages:   {len(messages)} ({user_count} user, {assistant_count} assistant)"); print(f"Uploads:    {embedded_upload_count} embedded, {unavailable_upload_count} {unavailable_label}"); print(f"Timestamps: {timestamp_count} message timestamp(s) preserved"); print(f"References: {reference_count} public reference URL(s) added as plain text"); print("Status:     SUCCESS"); return 0
+
+    parser = argparse.ArgumentParser(
+        description=(
+            "Create a DOCX from a public ChatGPT Share URL or "
+            "regenerate one from a permanent archive."
+        )
+    )
+
+    parser.add_argument(
+        "source",
+        help="Public ChatGPT Share URL or permanent archive ZIP",
+    )
+
+    args = parser.parse_args()
+
+    working_dir, archive_dir, docx_dir = managed_directories(
+        Path(__file__)
+    )
+
+    docx_dir.mkdir(exist_ok=True)
+
+    source = args.source.strip()
+
+    if source.startswith(("https://", "http://")):
+        source_mode = "share"
+
+        conversation, session, share_id = (
+            load_public_share_conversation(
+                source
+            )
+        )
+
+        linear = conversation.get("linear_conversation")
+
+        if not isinstance(linear, list):
+            raise ExtractionError(
+                "linear_conversation is missing or invalid."
+            )
+
+        nodes = [
+            node
+            for node in linear
+            if isinstance(node, dict)
+        ]
+
+        if len(nodes) != len(linear):
+            raise ExtractionError(
+                "linear_conversation contains an invalid node."
+            )
+
+        validate_chain(
+            nodes,
+            conversation.get("current_node"),
+        )
+
+        share_title = conversation.get("title")
+
+        if not isinstance(share_title, str) or not share_title.strip():
+            share_title = "(No title)"
+
+        share_archive_path = (
+            archive_dir / f"{share_title.strip()}.zip"
+        )
+
+        if share_archive_path.exists():
+            raise ExtractionError(
+                f"Archive already exists: {share_archive_path}"
+            )
+
+        messages = visible_messages(nodes)
+
+        total_uploads = sum(
+            len(uploads)
+            for _, _, uploads, _, _ in messages
+        )
+
+        processed_uploads = 0
+
+        for _, _, uploads, _, _ in messages:
+            for upload in uploads:
+                upload["image_data"] = load_public_share_image(
+                    session,
+                    share_id,
+                    upload,
+                )
+
+                upload["image_info"] = image_info(
+                    upload.get("image_data")
+                )
+
+                info = upload.get("image_info")
+
+                upload["image_dimensions"] = (
+                    info.get("dimensions")
+                    if info is not None
+                    else None
+                )
+
+                upload["display_size_emu"] = image_display_size_emu(
+                    upload.get("image_dimensions")
+                )
+
+                processed_uploads += 1
+                progress_percent = round(
+                    processed_uploads * 100 / total_uploads
+                )
+
+                print(
+                    f"\rProcessing uploads: "
+                    f"{processed_uploads}/{total_uploads} "
+                    f"({progress_percent}%)",
+                    end="",
+                    flush=True,
+                )
+
+        if total_uploads:
+            print()
+
+        if not messages:
+            raise ExtractionError(
+                "No visible user/assistant messages were found."
+            )
+
+    else:
+        source_mode = "archive"
+
+        archive_input_path = Path(source)
+
+        if not archive_input_path.is_absolute():
+            if archive_input_path.parent == Path("."):
+                archive_input_path = archive_dir / archive_input_path
+            else:
+                archive_input_path = working_dir / archive_input_path
+
+        conversation, image_data_by_file_id = (
+            load_public_share_archive(
+                archive_input_path
+            )
+        )
+
+        nodes, messages = (
+            prepare_messages_from_public_share_archive(
+                conversation,
+                image_data_by_file_id,
+            )
+        )
+
+    title = conversation.get("title")
+
+    if not isinstance(title, str) or not title.strip():
+        title = "(No title)"
+
+    output_path = docx_dir / f"{title.strip()}.docx"
+
+    create_docx(
+        title.strip(),
+        messages,
+        output_path,
+    )
+
+    archive_path = None
+
+    if source_mode == "share":
+        archive_path = archive_dir / f"{title.strip()}.zip"
+
+        create_public_share_archive(
+            conversation,
+            messages,
+            archive_path,
+        )
+
+    user_count = sum(
+        1
+        for role, _, _, _, _ in messages
+        if role == "user"
+    )
+
+    assistant_count = sum(
+        1
+        for role, _, _, _, _ in messages
+        if role == "assistant"
+    )
+
+    upload_count = sum(
+        len(uploads)
+        for _, _, uploads, _, _ in messages
+    )
+
+    embedded_image_count = sum(
+        1
+        for _, _, uploads, _, _ in messages
+        for upload in uploads
+        if upload.get("image_info") is not None
+    )
+
+    unavailable_image_count = sum(
+        1
+        for _, _, uploads, _, _ in messages
+        for upload in uploads
+        if upload.get("image_info") is None
+        and (
+            upload.get("content_type") == "image_asset_pointer"
+            or (
+                isinstance(upload.get("mime_type"), str)
+                and upload["mime_type"].lower().startswith("image/")
+            )
+        )
+    )
+
+    unavailable_attachment_count = sum(
+        1
+        for _, _, uploads, _, _ in messages
+        for upload in uploads
+        if upload.get("image_info") is None
+        and not (
+            upload.get("content_type") == "image_asset_pointer"
+            or (
+                isinstance(upload.get("mime_type"), str)
+                and upload["mime_type"].lower().startswith("image/")
+            )
+        )
+    )
+
+    reference_count = sum(
+        len(refs)
+        for _, _, _, refs, _ in messages
+    )
+
+    timestamp_count = sum(
+        1
+        for *_, timestamp in messages
+        if timestamp is not None
+    )
+
+    print(f"Output:     {output_path}")
+
+    if archive_path is not None:
+        print(f"Archive:    {archive_path}")
+    else:
+        print(f"Archive:    {archive_input_path}")
+
+    print(f"Title:      {title.strip()}")
+    print(f"Nodes:      {len(nodes)} (chain validated)")
+    print(
+        f"Messages:   {len(messages)} "
+        f"({user_count} user, "
+        f"{assistant_count} assistant)"
+    )
+    print(f"Uploads:    {upload_count} upload reference(s)")
+
+    print(
+        f"Images:     {embedded_image_count} embedded, "
+        f"{unavailable_image_count} unavailable"
+    )
+    print(
+        f"Attachments:{unavailable_attachment_count:3} unavailable"
+    )
+
+    print(
+        f"Timestamps: {timestamp_count} "
+        "message timestamp(s) preserved"
+    )
+    print(
+        f"References: {reference_count} "
+        "public reference URL(s) found"
+    )
+
+    end_time = _dt.datetime.now()
+    duration_seconds = time.perf_counter() - start_counter
+
+    hours, remainder = divmod(duration_seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+
+    print(
+        f"End Time:   {end_time.strftime('%Y-%m-%d %I:%M:%S %p')}"
+    )
+    print(
+        f"Duration:   {int(hours):02}:"
+        f"{int(minutes):02}:"
+        f"{seconds:05.2f}"
+    )
+
+    if source_mode == "share":
+        print(
+            "Status:     SHARE JSON + IMAGE + DOCX + ARCHIVE PASS"
+        )
+    else:
+        print(
+            "Status:     OFFLINE ARCHIVE + DOCX PASS"
+        )
+
+    return 0
 
 if __name__=="__main__":
     try: raise SystemExit(main())

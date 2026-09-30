@@ -41,11 +41,10 @@
 
 ## Continuation Document
 
-    CONTINUATION DOCUMENT: Python Pagination To Docx.docx
+The continuation DOCX is the document that was uploaded in the immediately preceding
+CHAT CONTINUATION message and that ChatGPT has already acknowledged receiving.
 
-For each new continuation, change only the filename above so that it exactly matches the uploaded DOCX containing the previous conversation.
-
-The remaining instructions are intended to stay the same for every conversation.
+Use that uploaded document as the continuation DOCX for these instructions.
 
 [↑ Back to Document Navigator](#chatgpt-conversation-continuation-instructions)
 
@@ -55,7 +54,7 @@ The remaining instructions are intended to stay the same for every conversation.
 
 ## Purpose
 
-These instructions tell a new ChatGPT conversation how to continue from the named continuation DOCX with as little loss of context as practical.
+These instructions tell a new ChatGPT conversation how to continue from the continuation DOCX with as little loss of context as practical.
 
 The continuation DOCX is the chronological record of the previous conversation. The objective is continuation, not redesign, reinterpretation, or replacement of the earlier discussion.
 
@@ -67,7 +66,7 @@ The continuation DOCX is the chronological record of the previous conversation. 
 
 ## Continuation Declaration
 
-> This chat is a direct continuation of the ChatGPT conversation preserved in the **CONTINUATION DOCUMENT** named above.
+> This chat is a direct continuation of the ChatGPT conversation preserved in the continuation DOCX identified above.
 >
 > Treat the continuation DOCX and the current chat as one chronological conversation when historical checking is requested.
 >
@@ -83,7 +82,7 @@ The continuation DOCX is the chronological record of the previous conversation. 
 
 ## Initial Synchronization
 
-When these instructions and the named continuation DOCX are first provided to a new chat, perform a one-time initial synchronization before resuming normal work.
+When these instructions and the continuation DOCX are first provided to a new chat, perform a one-time initial synchronization before resuming normal work.
 
 During initial synchronization, review the continuation DOCX sufficiently to understand:
 
@@ -260,7 +259,7 @@ Do not routinely consult, search, or reread the continuation DOCX. This keeps or
 
 ## FULL CHECK: ON
 
-When `FULL CHECK` is ON, use both the current conversation and the named continuation DOCX whenever prior history could materially affect the answer.
+When `FULL CHECK` is ON, use both the current conversation and the continuation DOCX whenever prior history could materially affect the answer.
 
 Before treating an important decision, rule, requirement, preference, unresolved question, implementation issue, or historical fact as new, unanswered, or missing, check the continuation DOCX as necessary.
 
@@ -278,9 +277,9 @@ When an exact historical fact remains uncertain after checking both sources, say
 
 ## Switching FULL CHECK Modes
 
-If the user says `full check on` or otherwise clearly requests `FULL CHECK: ON`, switch to `FULL CHECK: ON` and keep it on until changed.
+If the user says `FULL CHECK: ON` or otherwise clearly requests `FULL CHECK: ON`, switch to `FULL CHECK: ON` and keep it on until changed.
 
-If the user says `full check off` or otherwise clearly requests `FULL CHECK: OFF`, switch to `FULL CHECK: OFF` and keep it off until changed.
+If the user says `FULL CHECK: OFF` or otherwise clearly requests `FULL CHECK: OFF`, switch to `FULL CHECK: OFF` and keep it off until changed.
 
 [↑ Back to Document Navigator](#chatgpt-conversation-continuation-instructions)
 
