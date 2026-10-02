@@ -69,9 +69,9 @@ The permanent ZIP created by ChatGPT Conversation Bridge preserves the conversat
 
 ChatGPT Conversation Bridge requires:
 
-- A desktop computer running Windows, Linux, or macOS. Runtime validation for Version 2.0.0 was performed specifically on `Windows 11`, `Ubuntu 24.04 LTS`, and `macOS Monterey`.
+- A desktop computer running Windows, Linux, or macOS.
 - `Python 3.10` or later.
-- The Python `curl_cffi` package. Version `0.16.3` was used during final cross-platform validation.
+- The Python `curl_cffi` and `tzdata` packages. Version `0.16.3` of `curl_cffi` was used during final Version 2.0.0 cross-platform validation.
 - Internet access is required when creating a new archive from a ChatGPT shared URL. Internet access is not required when regenerating a DOCX from an existing permanent archive ZIP.
 - A ChatGPT shared-conversation URL for the conversation being archived.
 - Microsoft Word, LibreOffice Writer, or another compatible DOCX reader to view the generated document.
@@ -86,7 +86,7 @@ The exact operating systems and Python versions that were tested are documented 
 
 ## Installing Python
 
-ChatGPT Conversation Bridge requires `Python 3.10` or later and the third-party Python `curl_cffi` package.
+ChatGPT Conversation Bridge requires `Python 3.10` or later and the third-party Python `curl_cffi` and `tzdata` packages.
 
 Version `0.16.3` of `curl_cffi` was used during final Version 2.0.0 cross-platform validation.
 
@@ -116,13 +116,13 @@ Confirm that `Python 3.10` or later is reported.
 
 #### cURL Installation for Windows
 
-Install the required Python `curl_cffi` package:
+Install the required Python `curl_cffi` and `tzdata` packages:
 
 ```text
-python -m pip install curl_cffi
+python -m pip install curl_cffi tzdata
 ```
 
-Then verify the installed package version:
+Then verify the installed `curl_cffi` package version:
 
 ```text
 python -c "import curl_cffi; print(curl_cffi.__version__)"
@@ -150,7 +150,7 @@ The installation command above is for Ubuntu and other Linux distributions that 
 
 #### cURL Installation for Ubuntu
 
-ChatGPT Conversation Bridge requires the Python `curl_cffi` package. This is separate from the ordinary `curl` command-line program.
+ChatGPT Conversation Bridge requires the Python `curl_cffi` and `tzdata` packages. The `curl_cffi` package is separate from the ordinary `curl` command-line program.
 
 If you want to verify that the ordinary `curl` command is available, run:
 
@@ -164,15 +164,15 @@ If it is not installed on Ubuntu, it can normally be installed with:
 sudo apt install -y curl
 ```
 
-Install the required Python `curl_cffi` package with:
+Install the required Python `curl_cffi` and `tzdata` packages with:
 
 ```text
-sudo python3 -m pip install --break-system-packages curl_cffi
+sudo python3 -m pip install --break-system-packages curl_cffi tzdata
 ```
 
-The `--break-system-packages` option deliberately permits `pip` to install the package into an externally managed Python installation. Use it here only if you intend to install `curl_cffi` into that system Python environment.
+The `--break-system-packages` option deliberately permits `pip` to install the packages into an externally managed Python installation. Use it here only if you intend to install `curl_cffi` and `tzdata` into that system Python environment.
 
-Then verify the installed package version:
+Then verify the installed `curl_cffi` package version:
 
 ```text
 python3 -c "import curl_cffi; print(curl_cffi.__version__)"
@@ -198,39 +198,30 @@ https://www.python.org/downloads/macos/
 
 Open the downloaded installer and follow the installation prompts.
 
-After installation, open a new **Terminal** and verify the version:
+After installation, open a new **Terminal** and verify Python and `pip`:
 
 ```text
 python3 --version
+python3 -m pip --version
 ```
 
 Confirm that `Python 3.10` or later is reported.
 
-#### cURL Installation for macOS
+#### Python Package Installation for macOS
 
-Install the required Python `curl_cffi` package:
+Install the required Python `curl_cffi` and `tzdata` packages:
 
 ```text
-python3 -m pip install curl_cffi
+python3 -m pip install curl_cffi tzdata
 ```
 
-Then verify the installed package version:
+Then verify the installed `curl_cffi` package version:
 
 ```text
 python3 -c "import curl_cffi; print(curl_cffi.__version__)"
 ```
 
 Version `0.16.3` was used during final Version 2.0.0 validation.
-
-On some macOS systems, installation of Python packages that require local build tools may require acceptance of the Xcode license. If installation reports an Xcode license problem, run:
-
-```text
-sudo xcodebuild -license accept
-```
-
-Then retry the `curl_cffi` installation.
-
-Older Intel-based macOS releases may encounter dependency-specific compatibility issues that do not occur on newer systems. Version 2.0.0 was specifically runtime-validated on `macOS Monterey`.
 
 [↑ Back to Document Navigator](#chatgpt-conversation-bridge-documentation)
 
@@ -927,7 +918,7 @@ The read-only/open-view-only behavior is intended to reduce accidental changes t
 
 The generated DOCX can also be opened in LibreOffice Writer.
 
-During final validation on `Ubuntu 24.04 LTS` and `macOS Monterey`, LibreOffice Writer opened the generated document in a read-only state as intended.
+During final validation on `Ubuntu 24.04 LTS` and `macOS`, LibreOffice Writer opened the generated document in a read-only state as intended.
 
 The document remains fully available for reading and review. If intentional editing is required, LibreOffice Writer's **Edit Mode** can be used to switch the document into an editable state.
 
@@ -957,7 +948,7 @@ Final native-application validation confirmed the intended behavior:
 
 - Microsoft Word on `Windows 11` opens the document in a view-oriented state while still providing a way to enable editing.
 - LibreOffice Writer on `Ubuntu 24.04 LTS` opens the document read-only and allows intentional editing through **Edit Mode**.
-- LibreOffice Writer on `macOS Monterey` opens the document read-only and allows intentional editing through **Edit Mode**.
+- LibreOffice Writer on `macOS` opens the document read-only and allows intentional editing through **Edit Mode**.
 
 This behavior was validated with the final production output rather than inferred only from the DOCX package setting.
 
@@ -993,25 +984,32 @@ The permanent ZIP under `archive/` remains the retained source archive and can b
 
 ## Tested Platforms and Python Versions
 
-The final production version of ChatGPT Conversation Bridge Version 2.0.0 was runtime-tested on the following operating systems and Python versions:
+The final production version of ChatGPT Conversation Bridge Version 2.0.0 was originally runtime-tested on the following operating systems and Python versions:
 
 | Operating System | Python Version | Runtime Result |
 | --- | --- | --- |
 | `Windows 11` | `Python 3.12.3` | PASS |
 | `Ubuntu 24.04 LTS` | `Python 3.12.3` | PASS |
-| `macOS Monterey` | `Python 3.12.3` | PASS |
+
+Additional fresh-install testing performed after the Version 2.0.0 release validated the current installation procedure on the following systems:
+
+| Operating System | Python Version | Runtime Result |
+| --- | --- | --- |
+| `Windows 11` | `Python 3.14` | PASS |
+| `macOS` (Intel) | `Python 3.14.7` | PASS |
+| `macOS` (Apple Silicon) | `Python 3.14.7` | PASS |
 
 The program requires `Python 3.10` or later.
 
-ChatGPT Conversation Bridge Version 2.0.0 requires the third-party Python `curl_cffi` package. Version `0.16.3` was used during final cross-platform validation.
+ChatGPT Conversation Bridge Version 2.0.0 requires the third-party Python `curl_cffi` and `tzdata` packages. Version `0.16.3` of `curl_cffi` was used during final Version 2.0.0 cross-platform validation.
 
 Internet access is required when creating a new archive from a ChatGPT shared-conversation URL. Internet access is not required when regenerating a DOCX from an existing permanent archive ZIP.
 
 Version 2.0.0 does not require a particular web browser for conversation extraction because the program retrieves the public shared-conversation data directly from the supplied ChatGPT shared URL.
 
-Microsoft Word was used to validate the generated DOCX on `Windows 11`. LibreOffice Writer was used for native DOCX validation on `Ubuntu 24.04 LTS` and `macOS Monterey`.
+Microsoft Word was used to validate the generated DOCX on `Windows 11`. LibreOffice Writer was used for native DOCX validation on `Ubuntu 24.04 LTS` and `macOS`.
 
-These results document the environments actually tested for this release. They should not be interpreted as a guarantee for every operating-system version, Python version, `curl_cffi` version, office-suite version, hardware configuration, or future ChatGPT shared-conversation implementation.
+These results document the environments actually tested for this release. They should not be interpreted as a guarantee for every operating-system version, Python version, dependency version, office-suite version, hardware configuration, or future ChatGPT shared-conversation implementation.
 
 [↑ Back to Document Navigator](#chatgpt-conversation-bridge-documentation)
 
@@ -1033,7 +1031,7 @@ Cross-platform runtime validation was performed on:
 
 - `Windows 11`
 - `Ubuntu 24.04 LTS`
-- `macOS Monterey`
+- `macOS`
 
 The final production source used for cross-platform validation was identical on all three operating systems. Its SHA-256 fingerprint was:
 
@@ -1086,7 +1084,7 @@ Known limitations include:
 - The normal shared-URL workflow requires Internet access. DOCX regeneration from an existing permanent archive does not.
 - The DOCX preserves supported conversation structure and formatting, but it is not intended to reproduce the ChatGPT web interface pixel-for-pixel.
 - Recommended write protection is advisory. It reduces accidental editing but does not prevent deliberate modification of the DOCX.
-- Validation documents the tested operating systems, Python versions, `curl_cffi` version, and office applications. Untested environments or future dependency versions may behave differently.
+- Validation documents the tested operating systems, Python versions, dependency versions, and office applications. Untested environments or future dependency versions may behave differently.
 
 Preserve the permanent ZIP under `archive/` so that the DOCX can be regenerated later from the archived conversation data and supported uploaded images without retrieving the shared conversation again.
 
@@ -1196,11 +1194,28 @@ python3 chatgpt_conversation_bridge.py "Ear Crevice in Dog.zip"
 
 The permanent ZIP does not need to be extracted manually. ChatGPT Conversation Bridge reads the archive directly and creates the regenerated DOCX under `docx/`.
 
-**`curl_cffi` is not installed**
+**A required Python package is not installed**
 
-ChatGPT Conversation Bridge Version 2.0.0 requires the Python `curl_cffi` package for the shared-URL workflow.
+ChatGPT Conversation Bridge Version 2.0.0 requires the Python `curl_cffi` and `tzdata` packages.
 
-If Python reports that `curl_cffi` cannot be imported, install the required dependency using the platform-specific installation instructions in this documentation, then run ChatGPT Conversation Bridge again.
+If Python reports that `curl_cffi` or `tzdata` cannot be imported, install the required packages using the platform-specific installation instructions in this documentation, then run ChatGPT Conversation Bridge again.
+
+**A Homebrew Python installation on macOS reports an installation or version problem**
+
+Homebrew is not required to run ChatGPT Conversation Bridge. The Python.org installation described under [Installing Python](#installing-python) is the normal macOS installation path used by this documentation.
+
+If a Homebrew-installed Python reports an `externally-managed-environment` error when installing the required packages, the following command was successfully tested:
+
+```text
+python3 -m pip install --break-system-packages curl_cffi tzdata
+```
+
+If `python3 --version` still reports an older Python version immediately after installing Python with Homebrew, refresh the shell's command lookup and check the version again:
+
+```text
+rehash
+python3 --version
+```
 
 **A problem remains after checking the items above**
 
