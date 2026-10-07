@@ -21,7 +21,7 @@
 - [Run ChatGPT Conversation Bridge](#run-chatgpt-conversation-bridge)
 - [Supported Input Types](#supported-input-types)
 - [What Happens on the First Run](#what-happens-on-the-first-run)
-- [Console Report and Status: SUCCESS](#console-report-and-status-success)
+- [Console Report and Success Status](#console-report-and-success-status)
 - [Output Locations](#output-locations)
 
 ### Archive Management
@@ -71,7 +71,7 @@ ChatGPT Conversation Bridge requires:
 
 - A desktop computer running Windows, Linux, or macOS.
 - `Python 3.10` or later.
-- The Python `curl_cffi` and `tzdata` packages. Version `0.16.3` of `curl_cffi` was used during final Version 2.0.0 cross-platform validation.
+- The Python `curl_cffi`, `tzdata`, and `tzlocal` packages. Version `0.16.3` of `curl_cffi` was used during final Version 2.0.0 cross-platform validation.
 - Internet access is required when creating a new archive from a ChatGPT shared URL. Internet access is not required when regenerating a DOCX from an existing permanent archive ZIP.
 - A ChatGPT shared-conversation URL for the conversation being archived.
 - Microsoft Word, LibreOffice Writer, or another compatible DOCX reader to view the generated document.
@@ -86,7 +86,7 @@ The exact operating systems and Python versions that were tested are documented 
 
 ## Installing Python
 
-ChatGPT Conversation Bridge requires `Python 3.10` or later and the third-party Python `curl_cffi` and `tzdata` packages.
+ChatGPT Conversation Bridge requires `Python 3.10` or later and the third-party Python `curl_cffi`, `tzdata`, and `tzlocal` packages.
 
 Version `0.16.3` of `curl_cffi` was used during final Version 2.0.0 cross-platform validation.
 
@@ -116,10 +116,10 @@ Confirm that `Python 3.10` or later is reported.
 
 #### cURL Installation for Windows
 
-Install the required Python `curl_cffi` and `tzdata` packages:
+Install the required Python `curl_cffi`, `tzdata`, and `tzlocal` packages:
 
 ```text
-python -m pip install curl_cffi tzdata
+python -m pip install curl_cffi tzdata tzlocal
 ```
 
 Then verify the installed `curl_cffi` package version:
@@ -150,7 +150,7 @@ The installation command above is for Ubuntu and other Linux distributions that 
 
 #### cURL Installation for Ubuntu
 
-ChatGPT Conversation Bridge requires the Python `curl_cffi` and `tzdata` packages. The `curl_cffi` package is separate from the ordinary `curl` command-line program.
+ChatGPT Conversation Bridge requires the Python `curl_cffi`, `tzdata`, and `tzlocal` packages. The `curl_cffi` package is separate from the ordinary `curl` command-line program.
 
 If you want to verify that the ordinary `curl` command is available, run:
 
@@ -164,13 +164,13 @@ If it is not installed on Ubuntu, it can normally be installed with:
 sudo apt install -y curl
 ```
 
-Install the required Python `curl_cffi` and `tzdata` packages with:
+Install the required Python `curl_cffi`, `tzdata`, and `tzlocal` packages with:
 
 ```text
-sudo python3 -m pip install --break-system-packages curl_cffi tzdata
+sudo python3 -m pip install --break-system-packages curl_cffi tzdata tzlocal
 ```
 
-The `--break-system-packages` option deliberately permits `pip` to install the packages into an externally managed Python installation. Use it here only if you intend to install `curl_cffi` and `tzdata` into that system Python environment.
+The `--break-system-packages` option deliberately permits `pip` to install the packages into an externally managed Python installation. Use it here only if you intend to install `curl_cffi`, `tzdata`, and `tzlocal` into that system Python environment.
 
 Then verify the installed `curl_cffi` package version:
 
@@ -209,10 +209,10 @@ Confirm that `Python 3.10` or later is reported.
 
 #### Python Package Installation for macOS
 
-Install the required Python `curl_cffi` and `tzdata` packages:
+Install the required Python `curl_cffi`, `tzdata`, and `tzlocal` packages:
 
 ```text
-python3 -m pip install curl_cffi tzdata
+python3 -m pip install curl_cffi tzdata tzlocal
 ```
 
 Then verify the installed `curl_cffi` package version:
@@ -240,6 +240,8 @@ Download the ZIP file for the version of ChatGPT Conversation Bridge that you wa
 Extract the downloaded ZIP file directly into your user **home directory**.
 
 Do **not** create the `chatgpt-conversation-bridge` directory yourself before extracting the ZIP. The ZIP file already contains the `chatgpt-conversation-bridge` directory, and extracting the ZIP into your home directory creates it automatically.
+
+Keep the ChatGPT Conversation Bridge working folder at a reasonably shallow filesystem location. The program limits the complete resolved path of files it creates under its `archive`, `docx`, and `temp` folders to 240 Unicode characters. If a generated file would exceed that limit, the program stops with an error rather than further shortening or altering the path. If this occurs, move or extract the `chatgpt-conversation-bridge` folder to a shallower location, such as the home-directory locations recommended below.
 
 Your home directory depends on your operating system.
 
@@ -337,26 +339,7 @@ The project documentation is stored under:
 documentation/
 ```
 
-The `archive` and `docx` directories are not included in the extracted release package and do not need to be created manually. ChatGPT Conversation Bridge creates them automatically when they are needed.
-
-After the program has been run successfully with a valid ChatGPT shared-conversation URL, the working folder has the following structure:
-
-```text
-chatgpt-conversation-bridge/
-├── archive/
-├── documentation/
-│   ├── chatgpt-continuing-a-chat.md
-│   ├── chatgpt-conversation-bridge-documentation.md
-│   └── chatgpt-conversation-continuation-instructions.md
-├── docx/
-├── chatgpt_conversation_bridge.py
-├── LICENSE
-└── README.md
-```
-
-The `archive` directory contains permanent conversation archives created by ChatGPT Conversation Bridge.
-
-The `docx` directory contains the generated DOCX conversation documents.
+The `archive`, `docx`, and `temp` directories are not included in the extracted release package and do not need to be created manually. ChatGPT Conversation Bridge creates them automatically when they are needed.
 
 [↑ Back to Document Navigator](#chatgpt-conversation-bridge-documentation)
 
@@ -366,24 +349,7 @@ The `docx` directory contains the generated DOCX conversation documents.
 
 ## Normal Workflow
 
-ChatGPT Conversation Bridge uses a ChatGPT shared-conversation URL as its normal input. The program retrieves the public shared-conversation data directly, so saving the conversation through a web browser is no longer required.
-
-To obtain the shared-conversation URL, open the conversation you want to preserve and click **Share** in the upper-right corner of the ChatGPT conversation page. ChatGPT automatically copies the shared-conversation URL to the clipboard and displays a confirmation that the link was copied.
-
-A shared URL has the following general form:
-
-```text
-https://chatgpt.com/share/<UUID>
-```
-
-Because the program works from the shared conversation rather than a browser-saved copy of the page, the extraction workflow does not depend on Google Chrome, Microsoft Edge, Opera, Firefox, or another particular web browser.
-
-Before running ChatGPT Conversation Bridge, make sure the shared version reflects the conversation state you intend to preserve. The data available through a shared link can sometimes lag behind the current live conversation, so recently added messages may not immediately appear in the shared version.
-
-When the shared version reflects the conversation state you want to preserve, use the shared-conversation URL that ChatGPT copied to the clipboard as the input to ChatGPT Conversation Bridge.
-
-
-ChatGPT Conversation Bridge uses a ChatGPT shared-conversation URL directly. There is no browser Save As step, no HTML/HTM input file, no `_files` companion folder, and no requirement to load or scroll through the shared conversation in a web browser before running the program.
+ChatGPT Conversation Bridge uses a ChatGPT shared-conversation URL as its normal input and retrieves the public shared-conversation data directly.
 
 The overall workflow is:
 
@@ -393,7 +359,7 @@ The overall workflow is:
 4. The program retrieves supported uploaded images that are available through the shared conversation.
 5. The program creates a permanent ZIP archive under `archive/`.
 6. The program creates the readable DOCX under `docx/`.
-7. Confirm that the program finishes with `Status: SUCCESS`.
+7. Confirm that the program finishes with `Status:     SHARE JSON + IMAGE + DOCX + ARCHIVE SUCCESS`.
 8. Review the generated DOCX.
 9. Preserve the permanent ZIP under `archive/` for future DOCX regeneration.
 
@@ -421,11 +387,11 @@ The shared URL has the following general form:
 https://chatgpt.com/share/<UUID>
 ```
 
-ChatGPT Conversation Bridge uses this URL directly. You do not need to open the shared conversation in another browser tab, scroll through it, use Developer Tools, or save the page to your computer.
+ChatGPT Conversation Bridge uses this URL directly. You do not need to open the shared conversation in another browser tab, scroll through it, use Developer Tools, or save the page to your computer. The extraction workflow does not depend on Google Chrome, Microsoft Edge, Opera, Firefox, or another particular web browser.
 
 Before running ChatGPT Conversation Bridge, make sure the shared version of the conversation reflects the conversation state you intend to preserve. The data available through a shared link can sometimes lag behind the current live conversation, so recently added messages may not immediately appear in the shared version.
 
-When the conversation has reached the state you want to preserve, click **Share** in the upper-right corner of the ChatGPT conversation page. The shared-conversation URL is copied to the clipboard automatically, and ChatGPT displays a confirmation that the link was copied. Proceed to [Run ChatGPT Conversation Bridge](#run-chatgpt-conversation-bridge).
+When the shared version reflects the conversation state you want to preserve, proceed to [Run ChatGPT Conversation Bridge](#run-chatgpt-conversation-bridge).
 
 [↑ Back to Document Navigator](#chatgpt-conversation-bridge-documentation)
 
@@ -455,15 +421,15 @@ Replace `https://chatgpt.com/share/<UUID>` with the shared-conversation URL that
 
 ChatGPT Conversation Bridge retrieves the public shared-conversation data directly. It then retrieves supported uploaded images that are available through the shared conversation, creates the permanent archive, and generates the DOCX.
 
-Allow the program to finish. A successful run ends with:
+Allow the program to finish. A successful shared-conversation run ends with:
 
 ```text
-Status: SUCCESS
+Status:     SHARE JSON + IMAGE + DOCX + ARCHIVE SUCCESS
 ```
 
 Do not delete or replace any output files until the program has completed successfully.
 
-To regenerate a DOCX later from an existing permanent archive, supply the archive ZIP as the command-line argument instead of a shared-conversation URL. This process is described under [Permanent Archive and DOCX Regeneration](#permanent-archive-and-docx-regeneration).
+To regenerate a DOCX later from an existing permanent archive, supply the conversation/archive name without the `.zip` extension as the command-line argument instead of a shared-conversation URL. This process is described under [Permanent Archive and DOCX Regeneration](#permanent-archive-and-docx-regeneration).
 
 The following sections explain input handling, first-run processing, the console report, and output locations in detail.
 
@@ -475,10 +441,10 @@ The following sections explain input handling, first-run processing, the console
 
 ## Supported Input Types
 
-ChatGPT Conversation Bridge accepts one command-line argument identifying the source to process. Version 2.0.0 supports two source types:
+ChatGPT Conversation Bridge accepts one command-line argument identifying the source to process. Version 2.0.1 supports two source types:
 
 1. A ChatGPT shared-conversation URL for creating a new permanent archive and DOCX.
-2. An existing ChatGPT Conversation Bridge archive ZIP for regenerating a DOCX without retrieving the shared conversation again.
+2. A conversation/archive name identifying an existing permanent archive under the program's `archive` folder for regenerating a DOCX without retrieving the shared conversation again.
 
 ### ChatGPT Shared-Conversation URL
 
@@ -498,99 +464,28 @@ python3 chatgpt_conversation_bridge.py "https://chatgpt.com/share/<UUID>"
 
 ChatGPT Conversation Bridge retrieves the public shared-conversation data and available supported uploaded images, then creates the permanent archive and DOCX.
 
-### Existing Archive ZIP
+### Existing Permanent Archive
 
-To regenerate a DOCX from an existing permanent archive, supply the ZIP archive name instead of a shared-conversation URL.
+To regenerate a DOCX from an existing permanent archive, supply the conversation/archive name without the `.zip` extension instead of a shared-conversation URL.
 
-Several archive-path forms are supported.
+#### Conversation/Archive Name
 
-#### Archive Filename Only
-
-When only the ZIP filename is supplied, ChatGPT Conversation Bridge looks for that file in its `archive` folder.
+Supply the conversation/archive name without the `.zip` extension. ChatGPT Conversation Bridge looks for the corresponding `.zip` file in its `archive` folder.
 
 **Windows**
 
 ```text
-python chatgpt_conversation_bridge.py "Ear Crevice in Dog.zip"
+python chatgpt_conversation_bridge.py "Ear Crevice in Dog"
 ```
 
 **Linux/macOS**
 
 ```text
-python3 chatgpt_conversation_bridge.py "Ear Crevice in Dog.zip"
+python3 chatgpt_conversation_bridge.py "Ear Crevice in Dog"
 ```
+Quoted arguments are recommended, especially when a conversation/archive name contains spaces.
 
-#### Archive Folder Path
-
-The archive folder can also be included explicitly.
-
-**Windows**
-
-```text
-python chatgpt_conversation_bridge.py "archive\Ear Crevice in Dog.zip"
-```
-
-or:
-
-```text
-python chatgpt_conversation_bridge.py ".\archive\Ear Crevice in Dog.zip"
-```
-
-**Linux/macOS**
-
-```text
-python3 chatgpt_conversation_bridge.py "archive/Ear Crevice in Dog.zip"
-```
-
-or:
-
-```text
-python3 chatgpt_conversation_bridge.py "./archive/Ear Crevice in Dog.zip"
-```
-
-#### Explicit Current-Relative ZIP Path
-
-A ZIP can also be specified explicitly relative to the current working folder.
-
-**Windows**
-
-```text
-python chatgpt_conversation_bridge.py ".\Ear Crevice in Dog.zip"
-```
-
-**Linux/macOS**
-
-```text
-python3 chatgpt_conversation_bridge.py "./Ear Crevice in Dog.zip"
-```
-
-When this form is used with only a ZIP filename, ChatGPT Conversation Bridge resolves the archive through its `archive` folder.
-
-#### Absolute ZIP Path
-
-An absolute path to an existing archive ZIP is also supported.
-
-**Windows example**
-
-```text
-python chatgpt_conversation_bridge.py "D:\chatgpt-conversation-bridge\archive\Ear Crevice in Dog.zip"
-```
-
-**Linux example**
-
-```text
-python3 chatgpt_conversation_bridge.py "/home/<username>/chatgpt-conversation-bridge/archive/Ear Crevice in Dog.zip"
-```
-
-**macOS example**
-
-```text
-python3 chatgpt_conversation_bridge.py "/Users/<username>/chatgpt-conversation-bridge/archive/Ear Crevice in Dog.zip"
-```
-
-Quoted arguments are recommended, especially when a conversation or path contains spaces.
-
-The browser-capture inputs used by earlier versions are no longer supported. Version 2.0.0 does not process saved `.html` or `.htm` files or their `_files` companion folders.
+The browser-capture inputs used by earlier versions are no longer supported. ChatGPT Conversation Bridge does not process saved `.html` or `.htm` files or their `_files` companion folders.
 
 [↑ Back to Document Navigator](#chatgpt-conversation-bridge-documentation)
 
@@ -600,19 +495,15 @@ The browser-capture inputs used by earlier versions are no longer supported. Ver
 
 ## What Happens on the First Run
 
-When ChatGPT Conversation Bridge is run with a ChatGPT shared-conversation URL, it retrieves the public shared-conversation data directly rather than processing a browser-saved copy of the conversation.
+Once a ChatGPT shared-conversation URL has been supplied, the program processes the retrieved conversation data and available uploads to create the permanent archive and DOCX.
 
 The program:
 
-1. Retrieves the public shared-conversation data from the supplied ChatGPT shared URL.
-2. Validates the conversation structure and message chain.
-3. Identifies uploads referenced by the conversation.
-4. Retrieves supported uploaded images that are available through the shared conversation.
-5. Creates a permanent ZIP archive containing the conversation data and the supported uploaded images that were successfully retrieved.
-6. Creates the DOCX from the retrieved conversation data and images.
-7. Reports the processing results and finishes with `Status: SUCCESS` when the conversion completes successfully.
-
-The permanent archive contains the source data needed by ChatGPT Conversation Bridge to regenerate the DOCX later without retrieving the shared conversation again.
+1. Validates the conversation structure and message chain.
+2. Identifies uploads referenced by the conversation.
+3. Retrieves supported uploaded images that are available through the shared conversation.
+4. Creates a permanent ZIP archive containing the conversation data and the supported uploaded images that were successfully retrieved.
+5. Creates the DOCX from the retrieved conversation data and images.
 
 The archive has the following general structure:
 
@@ -636,21 +527,27 @@ After a successful first run, the permanent ZIP under `archive/` becomes the ret
 
 ---
 
-## Console Report and Status: SUCCESS
+## Console Report and Success Status
 
 While ChatGPT Conversation Bridge runs, it prints a console report describing the conversation it processed and the results of the conversion.
 
 The report provides processing information such as the source being used, conversation and message statistics, upload and image results, recovered references and timestamps when applicable, output information, and the final processing status.
 
-A successful run ends with:
+A successful shared-conversation run ends with:
 
 ```text
-Status: SUCCESS
+Status:     SHARE JSON + IMAGE + DOCX + ARCHIVE SUCCESS
 ```
 
-Do not treat the conversion as successfully completed until the program reaches `Status: SUCCESS`.
+A successful DOCX regeneration from an existing permanent archive ends with:
 
-If the program reports an error or does not reach `Status: SUCCESS`, investigate the reported problem before deleting, moving, or replacing an existing permanent archive or other source files.
+```text
+Status:     OFFLINE ARCHIVE + DOCX SUCCESS
+```
+
+Do not treat the conversion as successfully completed until the program reaches the applicable success status shown above.
+
+If the program reports an error or does not reach the applicable success status, investigate the reported problem before deleting, moving, or replacing an existing permanent archive or other source files.
 
 The console report is also useful when comparing repeated runs or validating the same conversation on another supported platform because it provides a consistent summary of what the program processed.
 
@@ -676,6 +573,7 @@ chatgpt-conversation-bridge/
 │   └── chatgpt-conversation-continuation-instructions.md
 ├── docx/
 │   └── CONVERSATION_NAME.docx
+├── temp/
 ├── chatgpt_conversation_bridge.py
 ├── LICENSE
 └── README.md
@@ -693,13 +591,15 @@ The permanent archive is stored under:
 archive/CONVERSATION_NAME.zip
 ```
 
-The `archive` and `docx` folders are created automatically when needed.
+`CONVERSATION_NAME` is based on the ChatGPT conversation title but is made safe for use as a filesystem name. This filename handling affects only the generated archive and DOCX filenames; it does not change the original conversation title stored in the archived conversation data or written into the DOCX. Unicode characters, including emoji and non-Latin text, are preserved where possible, while characters or names that are unsafe for supported filesystems are adjusted automatically. Excessively long filesystem names are shortened automatically within the program's filename limits.
+
+The `archive`, `docx`, and `temp` folders are created automatically when needed.
+
+The `temp` folder is used for temporary DOCX generation. ChatGPT Conversation Bridge creates a complete replacement DOCX there before committing it to the `docx` folder, so an existing DOCX is not deliberately deleted or replaced while regeneration is still in progress. Temporary DOCX files are cleaned up when they are no longer needed; the `temp` folder itself remains in place.
 
 The DOCX is the practical document for reading, reviewing, archiving, and supplying prior conversation context to a continuation chat.
 
-The permanent ZIP preserves the archived shared-conversation data and supported uploaded images that were successfully retrieved. It can later be used directly by ChatGPT Conversation Bridge to regenerate the DOCX without retrieving the shared conversation again.
-
-Keep the permanent ZIP if you want to retain the ability to regenerate the DOCX from the archived conversation data.
+The permanent ZIP preserves the archived shared-conversation data and supported uploaded images that were successfully retrieved.
 
 [↑ Back to Document Navigator](#chatgpt-conversation-bridge-documentation)
 
@@ -713,51 +613,23 @@ After a successful run from a ChatGPT shared-conversation URL, ChatGPT Conversat
 
 The permanent archive allows the DOCX to be regenerated later without retrieving the shared conversation again. Internet access is not required for DOCX regeneration from an existing archive.
 
-To regenerate the DOCX, run ChatGPT Conversation Bridge with the existing archive ZIP as its command-line argument.
+To regenerate the DOCX, run ChatGPT Conversation Bridge with the conversation/archive name without the `.zip` extension as its command-line argument.
 
-For example, when the archive is already in the program's `archive` folder, you can supply only its filename.
+For example:
 
 **Windows**
 
 ```text
-python chatgpt_conversation_bridge.py "Ear Crevice in Dog.zip"
+python chatgpt_conversation_bridge.py "Ear Crevice in Dog"
 ```
 
 **Linux/macOS**
 
 ```text
-python3 chatgpt_conversation_bridge.py "Ear Crevice in Dog.zip"
+python3 chatgpt_conversation_bridge.py "Ear Crevice in Dog"
 ```
 
-ChatGPT Conversation Bridge resolves the filename through its `archive` folder, reads `conversation.json` and the archived supported uploaded images directly from the ZIP, and generates the DOCX under `docx/`.
-
-You can also specify the archive folder explicitly.
-
-**Windows**
-
-```text
-python chatgpt_conversation_bridge.py "archive\Ear Crevice in Dog.zip"
-```
-
-or:
-
-```text
-python chatgpt_conversation_bridge.py ".\archive\Ear Crevice in Dog.zip"
-```
-
-**Linux/macOS**
-
-```text
-python3 chatgpt_conversation_bridge.py "archive/Ear Crevice in Dog.zip"
-```
-
-or:
-
-```text
-python3 chatgpt_conversation_bridge.py "./archive/Ear Crevice in Dog.zip"
-```
-
-An explicit current-relative ZIP path and an absolute ZIP path are also supported, as described under [Supported Input Types](#supported-input-types).
+ChatGPT Conversation Bridge resolves the supplied conversation/archive name through its `archive` folder, reads `conversation.json` and the archived supported uploaded images directly from the ZIP, and generates the DOCX under `docx/`.
 
 The permanent archive does not need to be extracted manually. Leave the ZIP intact and allow ChatGPT Conversation Bridge to read it directly.
 
@@ -798,13 +670,13 @@ ChatGPT Conversation Bridge is designed to keep the permanent archive separate f
 Follow these file-handling rules:
 
 - Do not treat a partial or failed run as a successfully completed archive.
-- Do not treat a conversion as successfully completed until the program reaches `Status: SUCCESS`.
+- Do not treat a conversion as successfully completed until the program reaches the applicable success status.
 - Preserve permanent ZIP archives under `archive/` if you may need to regenerate their DOCX files later.
 - Do not manually extract a permanent ZIP merely to regenerate its DOCX. ChatGPT Conversation Bridge reads the archive directly.
 - Do not manually modify `conversation.json` or files under `uploads/` inside a permanent archive unless you deliberately intend to alter the archived source.
 - If an archive collision is reported, preserve the existing archive until you have deliberately determined how the existing archive and the newly requested conversation state should be handled.
 - Do not delete or overwrite an existing permanent archive merely to bypass archive collision protection.
-- If a run fails or does not reach `Status: SUCCESS`, investigate the reported problem before deleting, moving, or replacing an existing permanent archive or other source files.
+- If a run fails or does not reach the applicable success status, investigate the reported problem before deleting, moving, or replacing an existing permanent archive or other source files.
 - A generated DOCX can be recreated from its permanent archive, but the permanent archive contains the retained source data used for regeneration. Do not assume that keeping only the DOCX provides the same recovery capability.
 
 These rules help protect the retained conversation data and supported uploaded images while keeping permanent source archives separate from generated DOCX files.
@@ -828,6 +700,8 @@ The generated DOCX preserves, when available:
 - Public reference URLs recovered from the conversation data.
 - Supported uploaded images that were successfully retrieved and preserved.
 - Clear placeholders for supported image or attachment records that cannot be recovered.
+
+When a message timestamp is available, ChatGPT Conversation Bridge displays it using the computer's local timezone. The timezone's historical daylight-saving rules are applied for the date of the message, and the displayed timestamp includes the applicable local timezone abbreviation. For example, a computer using the `America/New_York` timezone displays winter timestamps with `EST` and summer timestamps with `EDT`.
 
 User-authored soft line breaks are preserved so that intentional line structure in **YOU** messages is not unnecessarily collapsed.
 
@@ -900,13 +774,9 @@ Only reference information that is available in the retrieved or archived conver
 
 The generated DOCX can be opened directly in Microsoft Word.
 
-The production document uses Word's recommended write-protection setting to encourage open-view-only behavior while still allowing intentional editing.
+When the document opens in Word, review it normally as a conversation record. During final Windows validation, Word opened the document in a view-oriented state as intended.
 
-When the document opens in Word, review it normally as a conversation record. If Word presents the document in a protected or view-oriented state, this is expected behavior for the generated DOCX.
-
-During final Windows validation, the document could still be intentionally placed into an editable state using Word's available editing control.
-
-The read-only/open-view-only behavior is intended to reduce accidental changes to the archival conversation. It is not intended to prevent a user who deliberately chooses to edit the document from doing so.
+For details about the document's write-protection behavior, see [Read-Only / Open-View-Only Behavior](#read-only--open-view-only-behavior). If you deliberately want to modify the document, see [Intentionally Editing the DOCX](#intentionally-editing-the-docx).
 
 [↑ Back to Document Navigator](#chatgpt-conversation-bridge-documentation)
 
@@ -920,9 +790,9 @@ The generated DOCX can also be opened in LibreOffice Writer.
 
 During final validation on `Ubuntu 24.04 LTS` and `macOS`, LibreOffice Writer opened the generated document in a read-only state as intended.
 
-The document remains fully available for reading and review. If intentional editing is required, LibreOffice Writer's **Edit Mode** can be used to switch the document into an editable state.
+The exact appearance of application controls can vary by LibreOffice version and operating system.
 
-The exact appearance of application controls can vary by LibreOffice version and operating system, but the validated behavior is that the document opens for safe viewing while still allowing deliberate editing.
+For details about the document's write-protection behavior, see [Read-Only / Open-View-Only Behavior](#read-only--open-view-only-behavior). If you deliberately want to modify the document, see [Intentionally Editing the DOCX](#intentionally-editing-the-docx).
 
 [↑ Back to Document Navigator](#chatgpt-conversation-bridge-documentation)
 
@@ -1041,7 +911,7 @@ The final production source used for cross-platform validation was identical on 
 
 The final production source compiled successfully on Windows and completed the required runtime validation. The same source fingerprint was verified on Ubuntu and macOS, and the cross-platform runtime tests completed successfully.
 
-Validation included both the normal shared-conversation workflow and regeneration from an existing permanent archive. Archive-path handling was tested using filename-only and explicit relative archive paths, with platform-appropriate path separators.
+Version 2.0.0 validation included both the normal shared-conversation workflow and regeneration from an existing permanent archive. Archive-path handling in Version 2.0.0 was tested using filename-only and explicit relative archive paths, with platform-appropriate path separators.
 
 Final validation also covered:
 
@@ -1076,17 +946,15 @@ Known limitations include:
 - The shared-conversation data can lag behind the current live ChatGPT conversation. Recently added messages may therefore not immediately appear in the data available through the shared link. Before creating the permanent archive, make sure the shared version reflects the conversation state you intend to preserve.
 - ChatGPT Conversation Bridge can preserve only information represented in the shared-conversation data. Content that is not present in that data cannot be independently reconstructed by the program.
 - An upload represented in the conversation data is not necessarily available for retrieval through the shared conversation.
-- Version 2.0.0 embeds supported raster image formats. Unsupported image formats, including SVG, are not embedded as supported raster images.
+- ChatGPT Conversation Bridge embeds supported raster image formats. Unsupported image formats, including SVG, are not embedded as supported raster images.
 - Non-image attachments are not embedded in the DOCX as supported raster images. When appropriate, unavailable image or attachment records are represented by `[Image unavailable: filename]` or `[Attachment unavailable: filename]`.
 - If an uploaded image cannot be retrieved when the permanent archive is created, the program cannot later recover that image from the archive unless its bytes were successfully preserved there during archive creation.
 - Public reference URLs can be preserved only when the necessary reference information is present in the conversation data.
-- The normal shared-URL workflow depends on the ChatGPT public shared-conversation interface used by Version 2.0.0. A future change to that interface or its returned data could require a corresponding update to ChatGPT Conversation Bridge.
+- The normal shared-URL workflow depends on the ChatGPT public shared-conversation interface. A future change to that interface or its returned data could require a corresponding update to ChatGPT Conversation Bridge.
 - The normal shared-URL workflow requires Internet access. DOCX regeneration from an existing permanent archive does not.
 - The DOCX preserves supported conversation structure and formatting, but it is not intended to reproduce the ChatGPT web interface pixel-for-pixel.
 - Recommended write protection is advisory. It reduces accidental editing but does not prevent deliberate modification of the DOCX.
 - Validation documents the tested operating systems, Python versions, dependency versions, and office applications. Untested environments or future dependency versions may behave differently.
-
-Preserve the permanent ZIP under `archive/` so that the DOCX can be regenerated later from the archived conversation data and supported uploaded images without retrieving the shared conversation again.
 
 [↑ Back to Document Navigator](#chatgpt-conversation-bridge-documentation)
 
@@ -1132,7 +1000,7 @@ Unsupported image formats and non-image attachments are not embedded as supporte
 
 Review the console report to compare the number of uploads, embedded images, and unavailable upload references.
 
-**The program does not reach `Status: SUCCESS`**
+**The program does not reach the applicable success status**
 
 Do not treat the conversion as successfully completed.
 
@@ -1146,27 +1014,25 @@ Preserve the existing ZIP until you have deliberately determined how the existin
 
 Do not simply delete or overwrite the existing archive to bypass the collision protection.
 
-**The program cannot find an archive ZIP**
+**The program cannot find the specified conversation/archive**
 
 Check the archive argument supplied on the command line.
 
-If only the ZIP filename is supplied, ChatGPT Conversation Bridge looks for that ZIP under its `archive` folder.
+Supply the conversation/archive name without the `.zip` extension. ChatGPT Conversation Bridge looks for the corresponding ZIP under its `archive` folder.
 
 For example:
 
 **Windows**
 
 ```text
-python chatgpt_conversation_bridge.py "Ear Crevice in Dog.zip"
+python chatgpt_conversation_bridge.py "Ear Crevice in Dog"
 ```
 
 **Linux/macOS**
 
 ```text
-python3 chatgpt_conversation_bridge.py "Ear Crevice in Dog.zip"
+python3 chatgpt_conversation_bridge.py "Ear Crevice in Dog"
 ```
-
-Explicit relative and absolute archive paths are also supported as described under [Supported Input Types](#supported-input-types).
 
 **The DOCX opens read-only or in a view-oriented state**
 
@@ -1176,29 +1042,29 @@ In Microsoft Word, use the available editing control when intentional editing is
 
 **The DOCX needs to be regenerated**
 
-Run ChatGPT Conversation Bridge with the existing permanent archive ZIP as the source. Internet access is not required for archive-based regeneration.
+Run ChatGPT Conversation Bridge with the conversation/archive name without the `.zip` extension as the source. Internet access is not required for archive-based regeneration.
 
 For example:
 
 **Windows**
 
 ```text
-python chatgpt_conversation_bridge.py "Ear Crevice in Dog.zip"
+python chatgpt_conversation_bridge.py "Ear Crevice in Dog"
 ```
 
 **Linux/macOS**
 
 ```text
-python3 chatgpt_conversation_bridge.py "Ear Crevice in Dog.zip"
+python3 chatgpt_conversation_bridge.py "Ear Crevice in Dog"
 ```
 
-The permanent ZIP does not need to be extracted manually. ChatGPT Conversation Bridge reads the archive directly and creates the regenerated DOCX under `docx/`.
+The permanent ZIP does not need to be extracted manually. ChatGPT Conversation Bridge resolves the supplied conversation/archive name through its `archive` folder, reads the archive directly, and creates the regenerated DOCX under `docx/`.
 
 **A required Python package is not installed**
 
-ChatGPT Conversation Bridge Version 2.0.0 requires the Python `curl_cffi` and `tzdata` packages.
+ChatGPT Conversation Bridge requires the Python `curl_cffi`, `tzdata`, and `tzlocal` packages.
 
-If Python reports that `curl_cffi` or `tzdata` cannot be imported, install the required packages using the platform-specific installation instructions in this documentation, then run ChatGPT Conversation Bridge again.
+If Python reports that `curl_cffi`, `tzdata`, or `tzlocal` cannot be imported, install the required packages using the platform-specific installation instructions in this documentation, then run ChatGPT Conversation Bridge again.
 
 **A Homebrew Python installation on macOS reports an installation or version problem**
 
@@ -1207,7 +1073,7 @@ Homebrew is not required to run ChatGPT Conversation Bridge. The Python.org inst
 If a Homebrew-installed Python reports an `externally-managed-environment` error when installing the required packages, the following command was successfully tested:
 
 ```text
-python3 -m pip install --break-system-packages curl_cffi tzdata
+python3 -m pip install --break-system-packages curl_cffi tzdata tzlocal
 ```
 
 If `python3 --version` still reports an older Python version immediately after installing Python with Homebrew, refresh the shell's command lookup and check the version again:

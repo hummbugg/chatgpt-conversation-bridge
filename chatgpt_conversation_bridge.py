@@ -2,7 +2,7 @@
 """
 ChatGPT Conversation Bridge
 
-Version: 2.0.0
+Version: 2.0.1
 Author: hummbugg
 Copyright (c) 2026 hummbugg
 
@@ -11,7 +11,7 @@ and a DOCX document for conversation continuation and archival.
 
 Usage:
     python chatgpt_conversation_bridge.py "https://chatgpt.com/share/<share-id>"
-    python chatgpt_conversation_bridge.py "archive/CONVERSATION_NAME.zip"
+    python chatgpt_conversation_bridge.py "CONVERSATION_NAME"
 
 The script uses its own directory as the working directory.
 
@@ -29,12 +29,14 @@ Archives are written to:
 DOCX output is written to:
     docx/CONVERSATION_NAME.docx
 
-An existing output DOCX is always overwritten. An existing permanent
-conversation archive is not overwritten.
+An existing output DOCX is replaced only after successful regeneration.
+An existing permanent conversation archive is not overwritten.
 
 Requires:
     Python 3.10+
     curl_cffi
+    tzdata
+    tzlocal
 
 A network connection is required when processing a public ChatGPT Share URL.
 Regenerating a DOCX from an existing archive is an offline operation.
@@ -47,11 +49,14 @@ import html as html_lib
 import zipfile
 import datetime as _dt
 import time
-from zoneinfo import ZoneInfo
+from tzlocal import get_localzone
 from xml.etree import ElementTree as ET
 import json
 import re
 import sys
+import unicodedata
+import os
+import uuid
 from pathlib import Path
 from typing import Any, Iterable
 from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
@@ -60,14 +65,101 @@ from curl_cffi import requests
 class ExtractionError(RuntimeError):
     pass
 
+def sanitize_filesystem_basename(title: str) -> str:
+    """Return a portable filesystem basename derived from a conversation title."""
+    name = unicodedata.normalize("NFC", title)
 
-def managed_directories(script_path: Path) -> tuple[Path, Path, Path]:
-    """Return the working, archive, and DOCX directories."""
+    name = "".join(
+        " " if char in '<>:"/\\|?*' or ord(char) <= 0x1F else char
+        for char in name
+    )
+
+    name = re.sub(r"\s+", " ", name).strip()
+    name = name.strip(".")
+
+    if not name:
+        name = "ChatGPT Conversation"
+
+    reserved_names = {
+        "CON",
+        "PRN",
+        "AUX",
+        "NUL",
+        "CONIN$",
+        "CONOUT$",
+        *(f"COM{number}" for number in range(1, 10)),
+        *(f"LPT{number}" for number in range(1, 10)),
+        "COM¹",
+        "COM²",
+        "COM³",
+        "LPT¹",
+        "LPT²",
+        "LPT³",
+    }
+
+    def is_reserved(value: str) -> bool:
+        device_name = value.split(".", 1)[0]
+        return device_name.upper() in reserved_names
+
+    def protect_reserved_name(value: str) -> str:
+        if not is_reserved(value):
+            return value
+
+        device_name, separator, remainder = value.partition(".")
+        device_name += " Chat"
+
+        if separator:
+            return f"{device_name}.{remainder}"
+
+        return device_name
+
+    name = protect_reserved_name(name)
+
+    # Use the longer generated extension (.docx) when enforcing the
+    # 240-byte complete-filename limit so the same basename is safe
+    # for both the .docx and .zip outputs.
+    max_basename_bytes = 240 - len(".docx".encode("utf-8"))
+
+    while (
+        len(name) > 120
+        or len(name.encode("utf-8")) > max_basename_bytes
+    ):
+        name = name[:-1]
+
+    name = name.rstrip(" .")
+
+    if not name:
+        name = "ChatGPT Conversation"
+
+    name = protect_reserved_name(name)
+
+    return name
+
+def validate_output_path(path: Path) -> Path:
+    """Return the resolved output path after enforcing the portable path limit."""
+    resolved_path = path.resolve()
+    path_length = len(str(resolved_path))
+
+    if path_length > 240:
+        raise ExtractionError(
+            "The output path is too long for ChatGPT Conversation Bridge's "
+            "portable path-safety limit.\n"
+            f"Path length: {path_length} characters\n"
+            "Maximum: 240 characters\n"
+            f"Path: {resolved_path}\n"
+            "Move the chatgpt-conversation-bridge folder to a shallower "
+            "directory and try again."
+        )
+
+    return resolved_path
+
+def managed_directories(script_path: Path) -> tuple[Path, Path, Path, Path]:
+    """Return the working, archive, DOCX, and temporary directories."""
     working_dir = script_path.resolve().parent
     archive_dir = working_dir / "archive"
     docx_dir = working_dir / "docx"
-    return working_dir, archive_dir, docx_dir
-
+    temp_dir = working_dir / "temp"
+    return working_dir, archive_dir, docx_dir, temp_dir
 
 def png_dimensions(data: bytes | None) -> tuple[int, int] | None:
     """Validate PNG structure and return width and height from the IHDR chunk."""
@@ -953,9 +1045,8 @@ def add_markdown(body: ET.Element, text: str, preserve_soft_breaks: bool = False
 def format_message_timestamp(timestamp: float | None) -> str:
     if timestamp is None:
         return ""
-    dt = _dt.datetime.fromtimestamp(timestamp, ZoneInfo("America/New_York"))
-    zone_name = "Eastern Daylight Time" if dt.dst() and dt.dst() != _dt.timedelta(0) else "Eastern Standard Time"
-    return f"{dt:%Y-%m-%d %I:%M:%S %p} {zone_name}"
+    dt = _dt.datetime.fromtimestamp(timestamp, get_localzone())
+    return f"{dt:%Y-%m-%d %I:%M:%S %p %Z}"
 
 
 def add_message_header(body: ET.Element, role: str, timestamp: float | None) -> None:
@@ -1062,9 +1153,7 @@ def create_docx(title: str, messages: list[tuple[str,str,list[dict[str, Any]],li
         + "".join(doc_relationships)
         + '</Relationships>'
     )    
-    if output_path.exists(): output_path.unlink()
     with zipfile.ZipFile(output_path,"w",compression=zipfile.ZIP_DEFLATED) as zf:
-
         zf.writestr("[Content_Types].xml", content_types)
         zf.writestr("_rels/.rels", root_rels)
         zf.writestr(
@@ -1082,6 +1171,57 @@ def create_docx(title: str, messages: list[tuple[str,str,list[dict[str, Any]],li
         
         for upload, _, media_name in image_relationships:
             zf.writestr(f"word/media/{media_name}", upload["image_data"])
+
+def create_docx_candidate(
+    title: str,
+    messages: list[
+        tuple[
+            str,
+            str,
+            list[dict[str, Any]],
+            list[str],
+            float | None,
+        ]
+    ],
+    temp_dir: Path,
+) -> Path:
+    """Create a complete DOCX candidate in the project temporary directory."""
+    candidate_path = validate_output_path(
+        temp_dir / f"{uuid.uuid4().hex}.docx"
+    )
+
+    try:
+        create_docx(
+            title,
+            messages,
+            candidate_path,
+        )
+    except Exception:
+        try:
+            candidate_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
+
+    return candidate_path
+
+def commit_docx_candidate(
+    candidate_path: Path,
+    output_path: Path,
+) -> Path:
+    """Commit a completed temporary DOCX candidate to its final destination."""
+    final_path = validate_output_path(output_path)
+
+    try:
+        os.replace(candidate_path, final_path)
+    except Exception:
+        try:
+            candidate_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise
+
+    return final_path
 
 def load_public_share_conversation(
     share_url: str,
@@ -1554,16 +1694,17 @@ def main() -> int:
 
     parser.add_argument(
         "source",
-        help="Public ChatGPT Share URL or permanent archive ZIP",
+        help="Public ChatGPT Share URL or conversation/archive name",
     )
 
     args = parser.parse_args()
 
-    working_dir, archive_dir, docx_dir = managed_directories(
+    working_dir, archive_dir, docx_dir, temp_dir = managed_directories(
         Path(__file__)
     )
 
     docx_dir.mkdir(exist_ok=True)
+    temp_dir.mkdir(exist_ok=True)
 
     source = args.source.strip()
 
@@ -1604,8 +1745,12 @@ def main() -> int:
         if not isinstance(share_title, str) or not share_title.strip():
             share_title = "(No title)"
 
-        share_archive_path = (
-            archive_dir / f"{share_title.strip()}.zip"
+        filesystem_basename = sanitize_filesystem_basename(
+            share_title.strip()
+        )
+
+        share_archive_path = validate_output_path(
+            archive_dir / f"{filesystem_basename}.zip"
         )
 
         if share_archive_path.exists():
@@ -1670,13 +1815,26 @@ def main() -> int:
     else:
         source_mode = "archive"
 
-        archive_input_path = Path(source)
+        if not source:
+            raise ExtractionError(
+                "The conversation/archive name cannot be empty."
+            )
 
-        if not archive_input_path.is_absolute():
-            if archive_input_path.parent == Path("."):
-                archive_input_path = archive_dir / archive_input_path
-            else:
-                archive_input_path = working_dir / archive_input_path
+        if "/" in source or "\\" in source:
+            raise ExtractionError(
+                "Supply only the conversation/archive name, not a path."
+            )
+
+        if source.lower().endswith(".zip"):
+            raise ExtractionError(
+                "Supply the conversation/archive name without the .zip extension."
+            )
+
+        filesystem_basename = source
+
+        archive_input_path = validate_output_path(
+            archive_dir / f"{filesystem_basename}.zip"
+        )
 
         conversation, image_data_by_file_id = (
             load_public_share_archive(
@@ -1696,24 +1854,38 @@ def main() -> int:
     if not isinstance(title, str) or not title.strip():
         title = "(No title)"
 
-    output_path = docx_dir / f"{title.strip()}.docx"
+    output_path = validate_output_path(
+        docx_dir / f"{filesystem_basename}.docx"
+    )
 
-    create_docx(
+    candidate_path = create_docx_candidate(
         title.strip(),
         messages,
-        output_path,
+        temp_dir,
     )
 
     archive_path = None
 
     if source_mode == "share":
-        archive_path = archive_dir / f"{title.strip()}.zip"
+        archive_path = share_archive_path
 
-        create_public_share_archive(
-            conversation,
-            messages,
-            archive_path,
-        )
+        try:
+            create_public_share_archive(
+                conversation,
+                messages,
+                archive_path,
+            )
+        except Exception:
+            try:
+                candidate_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+            raise
+
+    commit_docx_candidate(
+        candidate_path,
+        output_path,
+    )
 
     user_count = sum(
         1
@@ -1828,11 +2000,11 @@ def main() -> int:
 
     if source_mode == "share":
         print(
-            "Status:     SHARE JSON + IMAGE + DOCX + ARCHIVE PASS"
+            "Status:     SHARE JSON + IMAGE + DOCX + ARCHIVE SUCCESS"
         )
     else:
         print(
-            "Status:     OFFLINE ARCHIVE + DOCX PASS"
+            "Status:     OFFLINE ARCHIVE + DOCX SUCCESS"
         )
 
     return 0
