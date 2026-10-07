@@ -49,4 +49,5 @@ The generated DOCX also provides a portable, human-readable archive that can be 
 - [Known Limitations](documentation/chatgpt-conversation-bridge-documentation.md#known-limitations)
 - [Tested Platforms and Python Versions](documentation/chatgpt-conversation-bridge-documentation.md#tested-platforms-and-python-versions)
 - [What Has Been Tested and Validated?](documentation/chatgpt-conversation-bridge-documentation.md#production-testing-and-validation)
+- [Project Release, Version History and Compatibility Information](documentation/chatgpt-conversation-bridge-release-history.md#project-release-version-history-and-compatibility-information)
 - [Complete Documentation Reference](documentation/chatgpt-conversation-bridge-documentation.md#document-navigator)
