@@ -51,3 +51,7 @@ The generated DOCX also provides a portable, human-readable archive that can be 
 - [What Has Been Tested and Validated?](documentation/chatgpt-conversation-bridge-documentation.md#production-testing-and-validation)
 - [Project Release, Version History and Compatibility Information](documentation/chatgpt-conversation-bridge-release-history.md#project-release-version-history-and-compatibility-information)
 - [Complete Documentation Reference](documentation/chatgpt-conversation-bridge-documentation.md#document-navigator)
+
+## Screenshots
+
+[View Screenshots of Generated DOCX Documents](documentation/screen-shots.md#view-screenshots-of-generated-docx-documents)
